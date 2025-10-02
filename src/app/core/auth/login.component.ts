@@ -8,31 +8,15 @@ import {Router} from "@angular/router";
     standalone: true,
     selector: 'app-login',
     imports: [ReactiveFormsModule, TranslateModule],
-    template: `
-        <form [formGroup]="form" (ngSubmit)="onSubmit()">
-            <label>
-                {{ 'login.email' | translate }}
-                <input type="email" formControlName="email" required />
-            </label>
-            <br />
-            <label>
-                {{ 'login.password' | translate }}
-                <input type="password" formControlName="password" required />
-            </label>
-            <br />
-            <label>
-                {{ 'login.tenant' | translate }}
-                <input formControlName="tenant" required />
-            </label>
-            <br />
-            <button type="submit">{{ 'login.submit' | translate }}</button>
-        </form>`,
-    /* ... */
+    templateUrl: './login.component.html',
 })
 export class LoginComponent {
     private fb = inject(FormBuilder);
     private readonly auth = inject(AuthService);
     private readonly router = inject(Router);
+
+    loading = false;
+    error: string | null = null;
 
     form = this.fb.group({
         email: ['', [Validators.required, Validators.email]],
@@ -40,10 +24,30 @@ export class LoginComponent {
         tenant: ['default', Validators.required],
     });
 
+    isAuthenticated() {
+        return this.auth.isAuthenticated();
+    }
     onSubmit() {
         if (this.form.invalid) return;
+        this.loading = true;
+        this.error = null;
         const { email, password, tenant } = this.form.getRawValue();
-        this.auth.login(email!, password!, tenant!);
-        this.router.navigateByUrl('/home');
+        this.auth.login(email!, password!, tenant!).subscribe({
+            next: () => {
+                this.loading = false;
+                this.router.navigateByUrl('/home');
+            },
+            error: (err) => {
+                this.loading = false;
+                this.error = 'Login failed';
+            }
+        });
+    }
+
+    logout() {
+        this.auth.logout().subscribe({
+            next: () => this.router.navigateByUrl('/login'),
+            error: () => this.router.navigateByUrl('/login')
+        });
     }
 }

@@ -1,6 +1,7 @@
-import { Injectable } from '@angular/core';
-import { BehaviorSubject } from 'rxjs';
+import { Injectable, inject } from '@angular/core';
+import { BehaviorSubject, Observable, catchError, map, tap } from 'rxjs';
 import { CacheStore } from '../infra/repo/cache-store';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 
 export interface Session {
   user: { email: string };
@@ -19,6 +20,8 @@ export class AuthService {
   /** Observable stream to monitor authentication/session changes */
   readonly authChanges$ = this.session$.asObservable();
   private bc?: BroadcastChannel;
+
+  private readonly http = inject(HttpClient);
 
   constructor(private cache: CacheStore) {
     // Listen for storage events from other tabs
@@ -54,22 +57,70 @@ export class AuthService {
     return !!this.session$.value;
   }
 
-  login(email: string, password: string, tenant: string) {
-    // For now, accept any credentials and create a local session
-    const sess: Session = { user: { email }, tenant, createdAt: Date.now() };
-    this.session$.next(sess);
-    localStorage.setItem(SESSION_KEY, JSON.stringify(sess));
-    // Signal tenant as it could affect caches
-    this.broadcast({ type: BROADCAST_TENANT, tenant });
+  login(email: string, password: string, tenant: string): Observable<void> {
+    const basic = 'Basic ' + btoa(`${email}:${password}`);
+    const headers = new HttpHeaders({
+      'authorization': basic,
+      'content-type': 'application/json'
+    });
+    return this.http
+      .post('/api/auth/login', { username: email, password }, { headers, withCredentials: true })
+      .pipe(
+        tap(() => {
+          const sess: Session = { user: { email }, tenant, createdAt: Date.now() };
+          this.session$.next(sess);
+          localStorage.setItem(SESSION_KEY, JSON.stringify(sess));
+          // Signal tenant as it could affect caches
+          this.broadcast({ type: BROADCAST_TENANT, tenant });
+        }),
+        map(() => void 0)
+      );
   }
 
-  logout() {
-    this.session$.next(null);
-    localStorage.removeItem(SESSION_KEY);
-    this.clearCaches();
-    // Broadcast to other tabs
-    localStorage.setItem(BROADCAST_LOGOUT, Date.now().toString());
-    this.broadcast({ type: BROADCAST_LOGOUT });
+  logout(): Observable<void> {
+    const sess = this.session$.value;
+    const auth = sess?.token;
+    const xsrf = this.get_xsrf_token() ?? '';
+    const headersObj: Record<string, string> = {};
+    if (auth) headersObj['authorization'] = auth;
+    if (xsrf) headersObj['x-xsrf-token'] = xsrf;
+    const headers = new HttpHeaders(headersObj);
+
+    return this.http.post('/api/auth/logout', {}, { headers, withCredentials: true }).pipe(
+      catchError((err) => {
+        // Even if network fails, proceed to clear client state to avoid being stuck
+        return new Observable<void>((subscriber) => {
+          subscriber.next();
+          subscriber.complete();
+        });
+      }),
+      tap(() => {
+        this.session$.next(null);
+        localStorage.removeItem(SESSION_KEY);
+        this.clearCaches();
+        // Broadcast to other tabs
+        localStorage.setItem(BROADCAST_LOGOUT, Date.now().toString());
+        this.broadcast({ type: BROADCAST_LOGOUT });
+      }),
+      map(() => void 0)
+    );
+  }
+
+  private getCookie(name: string): string | null {
+    const cname = name + '=';
+    const decodedCookie = decodeURIComponent(document.cookie);
+    const ca = decodedCookie.split(';');
+    for (let c of ca) {
+      while (c.startsWith(' ')) c = c.substring(1);
+      if (c.startsWith(cname)) return c.substring(cname.length, c.length);
+    }
+    return null;
+  }
+
+  get_xsrf_token(): string | null {
+    const token = this.getCookie('XSRF-TOKEN');
+    if (!token) return null;
+    return token.split(';')[0];
   }
 
   switchTenant(tenant: string) {

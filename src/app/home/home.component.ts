@@ -8,11 +8,8 @@ import { Subscription } from 'rxjs';
   standalone: true,
   selector: 'app-home',
   imports: [TranslateModule],
-  template: `
-    <h2>{{ 'home.title' | translate }}</h2>
-    <p>{{ 'home.welcome' | translate }}</p>
-    <a (click)="logout()">Logout</a>
-  `,
+  templateUrl: './home.component.html',
+  styleUrl: './home.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class HomeComponent implements OnInit, OnDestroy {
@@ -22,10 +19,10 @@ export class HomeComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     // If somehow reached without being authenticated, ensure redirect
-    if (!this.auth.isAuthenticated()) {
+    /*if (!this.auth.isAuthenticated()) {
       this.router.navigateByUrl('/login');
       return;
-    }
+    }*/
     // Watch for logout while on this page
     this.sub = this.auth.authChanges$.subscribe((s) => {
       if (!s) {

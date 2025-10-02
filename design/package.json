@@ -1,0 +1,10 @@
+{
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "style-dictionary": "^5.1.0"
+  },
+  "scripts": {
+    "build": "style-dictionary build"
+  }
+}
