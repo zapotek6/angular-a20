@@ -1,3 +1,4 @@
+@use "sass:meta";
 /* ============================================================================
    Global Styles Entry Point
    ============================================================================ */
@@ -132,25 +133,25 @@
 
 /* 3) Import layer files */
 @layer reset {
-  @import './reset';
+  @include meta.load-css('reset');
 }
 
 @layer base {
-  @import './base';
+  @include meta.load-css('base');
 }
 
 @layer theme {
-  @import './theme';
+  @include meta.load-css('theme');
 }
 
 @layer components {
-  @import './components';
+  @include meta.load-css('components');
 }
 
 @layer utilities {
-  @import 'utilities';
+  @include meta.load-css('utilities');
 }
 
 @layer overrides {
-  @import './overrides';
+  @include meta.load-css('overrides');
 }
