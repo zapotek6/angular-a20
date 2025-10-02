@@ -1,0 +1,17 @@
+{
+  "app": {
+    "title": "App di Pianificazionezzzz",
+    "logout": "Esci"
+  },
+  "login": {
+    "title": "Accesso",
+    "email": "Email",
+    "password": "Password",
+    "tenant": "Tenant",
+    "submit": "Entra"
+  },
+  "home": {
+    "title": "Home",
+    "welcome": "Benvenuto nell'app di pianificazione!"
+  }
+}

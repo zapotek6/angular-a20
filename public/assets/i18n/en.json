@@ -1,0 +1,17 @@
+{
+  "app": {
+    "title": "Planning App",
+    "logout": "Logout"
+  },
+  "login": {
+    "title": "Login",
+    "email": "Email",
+    "password": "Password",
+    "tenant": "Tenant",
+    "submit": "Sign in"
+  },
+  "home": {
+    "title": "Home",
+    "welcome": "Welcome to the Planning App!"
+  }
+}

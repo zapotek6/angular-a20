@@ -1,5 +1,10 @@
-import { Component, signal } from '@angular/core';
-import { RouterOutlet } from '@angular/router';
+import {Component, inject, signal} from '@angular/core';
+import {Router, RouterOutlet} from '@angular/router';
+import {TranslatePipe} from '@ngx-translate/core';
+import {I18nService} from './i18n/i18n.service';
+import {AuthService} from './core/auth/auth.service';
+import {LanguageSwitcherComponent} from './i18n/language-switcher.component';
+import {LoginComponent} from './core/auth/login.component';
 
 @Component({
   selector: 'app-root',
@@ -9,4 +14,12 @@ import { RouterOutlet } from '@angular/router';
 })
 export class App {
   protected readonly title = signal('a20');
+  private readonly i18n = inject(I18nService);
+  protected readonly auth = inject(AuthService);
+  private readonly router = inject(Router);
+
+  logout() {
+    this.auth.logout();
+    this.router.navigateByUrl('/login');
+  }
 }
