@@ -1,0 +1,97 @@
+:host {
+  --top-h: 56px;
+  --bottom-h: 44px;
+  --left-w: 64px; /* collapsed: 0 */
+  --right-w: 320px; /* collapsed: 0 */
+  --gap: 0;
+  --bg: #fff;
+  --line: #dadde1;
+}
+
+/* Grid skeleton */
+.app-layout {
+  height: 100vh; /* full viewport */
+  display: grid;
+  grid-template-rows: var(--top-h) 1fr var(--bottom-h);
+  grid-template-columns: var(--left-w) 1fr var(--right-w);
+  grid-template-areas: "top top top" "left main right" "bottom bottom bottom";
+  background: var(--bg);
+  gap: var(--gap);
+  overflow: hidden; /* scroll only inside panels */
+  border: 1px solid var(--line);
+}
+
+/* Regions */
+.topbar {
+  grid-area: top;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.bottombar {
+  grid-area: bottom;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border-top: 1px solid var(--line);
+}
+
+.sidebar-left {
+  grid-area: left;
+  border-right: 1px solid var(--line);
+  overflow: auto;
+}
+
+.sidebar-right {
+  grid-area: right;
+  border-left: 1px solid var(--line);
+  overflow: auto;
+}
+
+.workspace {
+  grid-area: main;
+  overflow: auto;
+}
+
+/* Auto-hide (collapse) helpers */
+.app-layout.hide-left {
+  --left-w: 0px;
+}
+
+.app-layout.hide-right {
+  --right-w: 0px;
+}
+
+.app-layout.hide-top {
+  --top-h: 0px;
+}
+
+.app-layout.hide-bottom {
+  --bottom-h: 0px;
+}
+
+/* Optional: make hidden bars visually removed */
+.app-layout.hide-left .sidebar-left,
+.app-layout.hide-right .sidebar-right,
+.app-layout.hide-top .topbar,
+.app-layout.hide-bottom .bottombar {
+  display: none;
+}
+
+/* Responsive: stack right bar under main on narrow screens */
+@media (max-width: 1024px) {
+  .app-layout {
+    --right-w: 0px;
+  }
+}
+/* Tiny screens: hide left by default (can be toggled back with a button) */
+@media (max-width: 680px) {
+  .app-layout {
+    --left-w: 0px;
+    --right-w: 0px;
+  }
+}
+
+/*# sourceMappingURL=home.component.css.map */

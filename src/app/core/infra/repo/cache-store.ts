@@ -47,6 +47,7 @@ export class CacheStore {
       return null;
     }
     this.metrics.inc('cache_hits');
+    console.log('cache hit', key, entry.etag, entry.expiresAt, now);
     return entry;
   }
 

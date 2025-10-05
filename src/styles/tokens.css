@@ -58,5 +58,20 @@
   --shadows-lg: 0px 8px 16px #000000;
   --shadows-multi: 0px 4px 12px #000000, 0px 8px 16px #000000;
   --color-brand-primary: #0d9488;
+  --color-pmo-pg: #e6e6ff;
+  --color-pmo-pj: #0066ff;
+  --color-pmo-ml: #ffd9b3;
+  --color-pmo-ob: #ffffcc;
+  --color-pmo-uc: #c299ff;
+  --color-pmo-us: #00cc66;
+  --color-pmo-ss: #f2ffcc;
+  --color-pmo-ts: #ffcce6;
+  --color-pmo-rk: #ff3ce6;
+  --color-pmo-as: #ffc34d;
+  --color-pmo-df: #b3b3cc;
+  --color-pmo-id: #00cc66;
+  --color-pmo-fl: #b3b3cc;
+  --color-pmo-qs: #f2ffcc;
+  --color-pmo-pr: #ffcce6;
   --size-font-base: 16px;
 }

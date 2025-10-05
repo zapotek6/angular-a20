@@ -1,4 +1,4 @@
-import { Injectable, inject } from '@angular/core';
+import {Injectable, inject, InjectionToken} from '@angular/core';
 import { RepositoryBase } from './repository-base';
 import { HttpClient } from '@angular/common/http';
 import { CacheStore } from './cache-store';
@@ -6,88 +6,115 @@ import { Router } from '@angular/router';
 import { MetricsService } from '../../../utils/metrics.service';
 import { Observable, filter, merge, of, switchMap } from 'rxjs';
 import { OnlineFocusService } from '../../../utils/online-focus.service';
+import {environment} from '../../../../environments/environment';
+import {AuthService} from '../../auth/auth.service';
+import {GenericRepository} from './generic.repository';
 
 export interface Item {
-  id: string;
   name: string;
-  description?: string;
+  value: string;
+  id: string;
+  version: number;
+  tenant_id: string;
+  location: string;
+  resource_type: string;
+  created_at: string;
+  updated_at: string;
+  created_by: string;
+  updated_by: string;
 }
 
+export const ITEM_RESOURCE_NAME = 'items';
+
 @Injectable({ providedIn: 'root' })
-export class ItemsRepository extends RepositoryBase {
-  private readonly baseUrl = '/api/items';
+export class ItemsRepository extends GenericRepository<Item> {
+  constructor(online: OnlineFocusService,
+              http: HttpClient,
+              cache: CacheStore,
+              router: Router,
+              metrics: MetricsService,
+              auth: AuthService) {
+    super(ITEM_RESOURCE_NAME, online, http, cache, router, metrics, auth);
+  }
+}
+
+/*@Injectable({ providedIn: 'root' })
+export class ItemsRepository1 extends RepositoryBase {
+  private readonly apiResourceName: string = 'items';
+  private readonly listKey: string;
   private readonly online = inject(OnlineFocusService);
 
-  constructor(http: HttpClient, cache: CacheStore, router: Router, metrics: MetricsService) {
-    super(http, cache, router, metrics);
+  constructor(http: HttpClient, cache: CacheStore, router: Router, metrics: MetricsService, auth: AuthService) {
+    super(http, cache, router, metrics, auth);
+    this.listKey = 'list:' + this.apiResourceName;
   }
 
-  private listKey(params?: Record<string, any>): string {
-    if (!params || Object.keys(params).length === 0) return 'list:items';
+  private buildListKey(params?: Record<string, any>): string {
+    if (!params || Object.keys(params).length === 0) return this.listKey;
     const q = Object.keys(params)
       .sort()
       .map((k) => `${k}=${encodeURIComponent(params[k])}`)
       .join('&');
-    return `list:items?${q}`;
+    return `${this.listKey}?${q}`;
   }
 
   private itemKey(id: string): string {
-    return `item:items:${id}`;
+    return `${this.listKey}:${id}`;
   }
 
-  getItems(params?: Record<string, any>): Observable<Item[]> {
-    return this.getList<Item[]>(this.listKey(params), this.baseUrl, params);
+  getMany(tenant_id: string, params?: Record<string, any>): Observable<Item[]> {
+    return this.getList<Item[]>(this.buildListKey(params), this.buildSprintappApiv1BaseUrl(tenant_id, this.apiResourceName), params);
   }
 
-  watchItems(params?: Record<string, any>): Observable<Item[]> {
-    const key = this.listKey(params);
+  watchItems(tenant_id: string, params?: Record<string, any>): Observable<Item[]> {
+    const key = this.buildListKey(params);
     return merge(
-      this.getItems(params),
+      this.getMany(tenant_id, params),
       this.online.triggers$.pipe(
         filter(() => {
           const entry = this.cache.peek<Item[]>(key);
           return !entry || entry.expiresAt <= Date.now();
         }),
-        switchMap(() => this.getItems(params))
+        switchMap(() => this.getMany(tenant_id, params))
       )
     );
   }
 
-  readItem(id: string): Observable<Item> {
-    return super.getItem<Item>(this.itemKey(id), `${this.baseUrl}/${id}`);
+  read(tenant_id: string, id: string): Observable<Item> {
+    return super.get<Item>(this.itemKey(id), `${this.buildSprintappApiv1BaseUrl(tenant_id, this.apiResourceName)}/${id}`);
   }
 
-  watchItem(id: string): Observable<Item> {
+  watchItem(tenant_id: string, id: string): Observable<Item> {
     const key = this.itemKey(id);
     return merge(
-      this.readItem(id),
+      this.read(tenant_id, id),
       this.online.triggers$.pipe(
         filter(() => {
           const entry = this.cache.peek<Item>(key);
           return !entry || entry.expiresAt <= Date.now();
         }),
-        switchMap(() => this.readItem(id))
+        switchMap(() => this.read(tenant_id, id))
       )
     );
   }
 
-  createItem(payload: Partial<Item>): Observable<Item> {
+  create(tenant_id: string, payload: Partial<Item>): Observable<Item> {
     // invalidate list keys; since we don't track params combinations centrally, invalidate the base list key
-    const toInvalidate = ['list:items'];
-    return this.optimisticCreate<Item>(toInvalidate, this.baseUrl, payload);
+    const toInvalidate = [this.listKey];
+    return this.optimisticCreate<Item>(toInvalidate, this.buildSprintappApiv1BaseUrl(tenant_id, this.apiResourceName), payload);
   }
 
-  updateItem(id: string, patch: Partial<Item>): Observable<Item> {
+  update(tenant_id: string, id: string, patch: Partial<Item>): Observable<Item> {
     const key = this.itemKey(id);
-    const url = `${this.baseUrl}/${id}`;
-    const toInvalidate = ['list:items'];
+    const url = `${this.buildSprintappApiv1BaseUrl(tenant_id, this.apiResourceName)}/${id}`;
+    const toInvalidate = [this.listKey];
     return this.optimisticUpdate<Item>(key, url, patch, toInvalidate);
   }
 
-  deleteItem(id: string): Observable<void> {
+  delete(tenant_id: string, id: string): Observable<void> {
     const key = this.itemKey(id);
-    const url = `${this.baseUrl}/${id}`;
-    const toInvalidate = ['list:items'];
+    const url = `${this.buildSprintappApiv1BaseUrl(tenant_id, this.apiResourceName)}/${id}`;
+    const toInvalidate = [this.listKey];
     return this.optimisticDelete(key, url, toInvalidate);
   }
-}
+}*/

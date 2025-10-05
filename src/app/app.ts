@@ -4,7 +4,7 @@ import {TranslatePipe} from '@ngx-translate/core';
 import {I18nService} from './i18n/i18n.service';
 import {AuthService} from './core/auth/auth.service';
 import {LanguageSwitcherComponent} from './i18n/language-switcher.component';
-import {LoginComponent} from './core/auth/login.component';
+import {LoginComponent} from './features/login/login.component';
 import {environment} from '../environments/environment';
 
 @Component({

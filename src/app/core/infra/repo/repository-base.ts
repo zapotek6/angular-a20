@@ -4,6 +4,9 @@ import { Router, NavigationStart } from '@angular/router';
 import { Observable, Subject, of, shareReplay, finalize, takeUntil, map, throwError, catchError } from 'rxjs';
 import { CacheStore } from './cache-store';
 import { MetricsService } from '../../../utils/metrics.service';
+import {AuthService} from '../../auth/auth.service';
+import {environment} from '../../../../environments/environment';
+import {Filters, Links, PaginationResponse} from './pagination';
 
 @Injectable({ providedIn: 'root' })
 export class RepositoryBase {
@@ -14,7 +17,8 @@ export class RepositoryBase {
     protected http: HttpClient,
     protected cache: CacheStore,
     router: Router,
-    protected metrics: MetricsService
+    protected metrics: MetricsService,
+    protected auth: AuthService
   ) {
     router.events.subscribe((ev) => {
       if (ev instanceof NavigationStart) {
@@ -23,39 +27,77 @@ export class RepositoryBase {
     });
   }
 
-  protected getList<T>(key: string, url: string, params?: Record<string, any>, ttlMs = 60_000): Observable<T> {
+  protected buildSprintappApiv1BaseUrl(tenant_id: string, apiResourceName: string): string {
+    return environment.apiUrl + '/api/v1/' + tenant_id + '/' + apiResourceName
+  }
+
+  protected getList<T>(key: string, url: string, params?: Record<string, any>, ttlMs = 60_000): Observable<PaginationResponse<T>> {
     const fresh = this.cache.get<T>(key);
     if (fresh) {
       // Provide cached quickly
       // Note: background refresh can be implemented by callers on focus/online using fetchList again.
-      return of(fresh.data as T);
+      let response = {
+        data: fresh.data as T[],
+        pagination: {
+          limit: -1,
+          returned: (fresh.data as T[]).length,
+          has_next: false,
+          next_cursor: null,
+          links: {
+            next: null,
+          },
+          filters: {
+            path: params?params['path']??"":"",
+          },
+          sort: [],
+        }
+      }
+      return of(response as PaginationResponse<T>);
     }
 
     const dedupKey = `GET|${key}`;
-    const inFlight = this.inflight.get(dedupKey);
-    if (inFlight) return inFlight as Observable<T>;
+    /*const inFlight = this.inflight.get(dedupKey);
+    if (inFlight) {
+      let response = {
+        data: fresh.data as T[],
+        pagination: {
+          limit: -1,
+          returned: (fresh.data as T[]).length,
+          has_next: false,
+          next_cursor: null,
+          links: {
+            next: null,
+          },
+          filters: {
+            path: params?params['path']??"":"",
+          },
+          sort: [],
+        }
+      }
+      return inFlight as Observable<T>;
+    }*/
 
     const entry = this.cache.peek<T>(key);
     const ifNoneMatch = entry?.etag;
 
     const httpParams = new HttpParams({ fromObject: params ?? {} });
-    const headers = ifNoneMatch ? new HttpHeaders({ 'If-None-Match': ifNoneMatch }) : undefined;
-
+    const headers = ifNoneMatch ? new HttpHeaders({ 'If-None-Match': ifNoneMatch}) : undefined;
+    headers?.append(this.auth.get_xsrf_header_name(), this.auth.get_xsrf_token());
     const req$ = this.http
-      .get<T>(url, { observe: 'response', params: httpParams, headers })
+      .get<PaginationResponse<T>>(url, { observe: 'response', params: httpParams, headers, withCredentials: true })
       .pipe(
-        map((resp: HttpResponse<T>) => {
+        map((resp: HttpResponse<PaginationResponse<T>>) => {
           const etag = resp.headers.get('ETag') || resp.headers.get('Etag') || resp.headers.get('etag') || undefined;
-          let body = resp.body as T | null;
-          if (!body) {
+          let body = resp.body as PaginationResponse<T> | null;
+          /*if (!body) {
             const cached = this.cache.peek<T>(key)?.data;
             if (cached) body = cached;
           }
           if (body != null) {
             this.cache.set<T>(key, body, etag ?? entry?.etag, ttlMs);
             this.cache.setUrlMeta(resp.url ?? url, { etag: etag ?? entry?.etag, body });
-          }
-          return body as T;
+          }*/
+          return body as PaginationResponse<T>;
         }),
         finalize(() => this.inflight.delete(dedupKey)),
         takeUntil(this.nav$),
@@ -66,7 +108,8 @@ export class RepositoryBase {
     return req$;
   }
 
-  protected getItem<T>(key: string, url: string, ttlMs = 60_000): Observable<T> {
+  protected get<T>(key: string, url: string, ttlMs = 60_000): Observable<T> {
+    console.log('get', key, url, this.cache);
     const fresh = this.cache.get<T>(key);
     if (fresh) return of(fresh.data as T);
 
@@ -78,9 +121,9 @@ export class RepositoryBase {
     const ifNoneMatch = entry?.etag;
 
     const headers = ifNoneMatch ? new HttpHeaders({ 'If-None-Match': ifNoneMatch }) : undefined;
-
+    headers?.append(this.auth.get_xsrf_header_name(), this.auth.get_xsrf_token());
     const req$ = this.http
-      .get<T>(url, { observe: 'response', headers })
+      .get<T>(url, { observe: 'response', headers ,withCredentials: true })
       .pipe(
         map((resp: HttpResponse<T>) => {
           const etag = resp.headers.get('ETag') || resp.headers.get('Etag') || resp.headers.get('etag') || undefined;
@@ -107,7 +150,8 @@ export class RepositoryBase {
     body: any
   ): Observable<T> {
     // For simplicity we only invalidate lists after success; callers may add provisional entry handling as needed
-    const req$ = this.http.post<T>(url, body, { observe: 'response' }).pipe(
+    const headers = new HttpHeaders().append(this.auth.get_xsrf_header_name(), this.auth.get_xsrf_token());
+    const req$ = this.http.post<T>(url, body, { observe: 'response', headers, withCredentials: true }).pipe(
       map((resp) => {
         const etag = resp.headers.get('ETag') || resp.headers.get('Etag') || resp.headers.get('etag') || undefined;
         const entity = resp.body as T;
@@ -142,8 +186,8 @@ export class RepositoryBase {
     }
     const ifMatch = snapshot?.etag;
     const headers = ifMatch ? new HttpHeaders({ 'If-Match': ifMatch }) : undefined;
-
-    const req$ = this.http.patch<T>(url, patch, { observe: 'response', headers }).pipe(
+    headers?.append(this.auth.get_xsrf_header_name(), this.auth.get_xsrf_token());
+    const req$ = this.http.patch<T>(url, patch, { observe: 'response', headers, withCredentials: true }).pipe(
       map((resp) => {
         const etag = resp.headers.get('ETag') || resp.headers.get('Etag') || resp.headers.get('etag') || undefined;
         const body = (resp.body ?? snapshot?.data) as T;
@@ -175,7 +219,8 @@ export class RepositoryBase {
     // optimistic remove from cache
     this.cache.invalidate([itemKey]);
 
-    const req$ = this.http.delete<void>(url, { observe: 'response' }).pipe(
+    const headers = new HttpHeaders().append(this.auth.get_xsrf_header_name(), this.auth.get_xsrf_token());
+    const req$ = this.http.delete<void>(url, { observe: 'response', headers, withCredentials: true }).pipe(
       map(() => {
         this.cache.invalidate(listKeysToInvalidate);
         this.metrics.inc('optimistic_success');

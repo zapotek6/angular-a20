@@ -1,7 +1,7 @@
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import {Component, inject} from "@angular/core";
 import {TranslateModule} from "@ngx-translate/core";
-import {AuthService} from "./auth.service";
+import {AuthService} from "../../core/auth/auth.service";
 import {Router} from "@angular/router";
 
 @Component({
@@ -9,6 +9,7 @@ import {Router} from "@angular/router";
     selector: 'app-login',
     imports: [ReactiveFormsModule, TranslateModule],
     templateUrl: './login.component.html',
+    styleUrls: ['./login.component.scss']
 })
 export class LoginComponent {
     private fb = inject(FormBuilder);

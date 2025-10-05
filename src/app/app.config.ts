@@ -11,6 +11,8 @@ import {CacheStore} from './core/infra/repo/cache-store';
 import {MetricsService} from './utils/metrics.service';
 import {OnlineFocusService} from './utils/online-focus.service';
 import {I18nService} from './i18n/i18n.service';
+import {WorkspaceService} from './core/workspace/workspace.service';
+import {LoggerService} from './core/logger/logger.service';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -24,6 +26,8 @@ export const appConfig: ApplicationConfig = {
     AuthService,
     CacheStore,
     MetricsService,
-    OnlineFocusService
+    OnlineFocusService,
+    WorkspaceService,
+    LoggerService,
   ]
 };

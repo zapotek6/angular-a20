@@ -1,7 +1,21 @@
 {
   "app": {
-    "title": "App di Pianificazione",
-    "logout": "Esci"
+    "name": "Sprint App",
+    "title": "Sprint App",
+    "subtitle": "Strategic Planning & Task Visualization",
+    "tagline": "From Vision to Execution",
+    "logout": "Esci",
+    "value_proposition": {
+      "title": "Strategic Clarity",
+      "description": "Sprint-App transforms scattered requirements, dependencies, and tasks into a single visual map.\nNo more juggling spreadsheets or siloed tools — strategy, execution, and resources finally speak the same language."
+    },
+    "product_descriptor": {
+      "title": "Structured Control",
+      "description": "Sprint-App is a project management platform that models projects with milestones, stories, tasks, risks, and allocations.\nIt gives teams a structured yet flexible view, aligning business goals with technical execution through the YARDI method."
+    },
+    "copyright": {
+      "short": "2025 Sprint App. All rights reserved."
+    }
   },
   "login": {
     "title": "Accesso",
@@ -12,6 +26,6 @@
   },
   "home": {
     "title": "Home",
-    "welcome": "Benvenuto nell'app di pianificazione!"
+    "welcome": "Benvenuto nella Sprint App!"
   }
 }

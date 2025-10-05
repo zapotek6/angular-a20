@@ -1,0 +1,9 @@
+<header class="topbar">
+  TOOL HEADER
+</header>
+
+<main class="workspace">
+  @for (pmo of pmos || []; track pmo.id) {
+    <app-pmo-card [pmo]="pmo"></app-pmo-card>
+  }
+</main>

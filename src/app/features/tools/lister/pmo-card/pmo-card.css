@@ -1,0 +1,22 @@
+:host {
+  --border-width-md: 2px;
+  display: block;
+}
+
+.card {
+  width: 20rem;
+  height: 3rem;
+  border-radius: var(--radius-md);
+  border-style: solid;
+  border-width: var(--border-width-md);
+  padding: 10px;
+  overflow: hidden;
+  transition: height var(--transition-slow), width var(--transition-fast);
+}
+
+.card:hover {
+  width: 30rem;
+  height: 8rem;
+}
+
+/*# sourceMappingURL=pmo-card.css.map */

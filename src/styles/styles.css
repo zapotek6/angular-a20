@@ -828,7 +828,7 @@
     box-shadow: var(--shadow-md);
   }
   .card-header {
-    padding: var(--space-lg);
+    padding: var(--space-sm);
     border-bottom: 1px solid var(--color-border-subtle);
   }
   .card-body {

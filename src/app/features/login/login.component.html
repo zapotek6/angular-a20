@@ -1,0 +1,145 @@
+@if (!isAuthenticated()) {
+  <div class="login-container">
+    <!-- Left Panel: Branding -->
+    <div class="login-brand">
+      <div class="login-brand-content">
+        <div class="login-logo">
+          <svg class="login-logo-icon" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M24 4L44 14V34L24 44L4 34V14L24 4Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+            <circle cx="24" cy="14" r="2" fill="currentColor"/>
+            <circle cx="44" cy="14" r="2" fill="currentColor"/>
+            <circle cx="4" cy="14" r="2" fill="currentColor"/>
+            <circle cx="24" cy="34" r="2" fill="currentColor"/>
+            <circle cx="44" cy="34" r="2" fill="currentColor"/>
+            <circle cx="4" cy="34" r="2" fill="currentColor"/>
+            <line x1="24" y1="14" x2="24" y2="34" stroke="currentColor" stroke-width="1.5"/>
+            <line x1="24" y1="14" x2="44" y2="14" stroke="currentColor" stroke-width="1.5"/>
+            <line x1="24" y1="14" x2="4" y2="14" stroke="currentColor" stroke-width="1.5"/>
+          </svg>
+        </div>
+
+        <h1 class="login-title">{{ 'app.name' | translate }}</h1>
+        <p class="login-subtitle">{{ 'app.tagline' | translate }}</p>
+
+        <div class="login-features">
+          <div class="login-feature">
+            <svg class="login-feature-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M9 5L5 9L9 13M15 11L19 7L15 3M13 3L11 21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span>{{ 'login.feature.graph' | translate }}</span>
+          </div>
+          <div class="login-feature">
+            <svg class="login-feature-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M4 15V9M8 15V5M12 15V12M16 15V8M20 15V11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            <span>{{ 'login.feature.analytics' | translate }}</span>
+          </div>
+          <div class="login-feature">
+            <svg class="login-feature-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/>
+              <path d="M12 4V2M12 22V20M20 12H22M2 12H4M17.657 6.343L19.071 4.929M4.929 19.071L6.343 17.657M17.657 17.657L19.071 19.071M4.929 4.929L6.343 6.343" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            <span>{{ 'login.feature.dependencies' | translate }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Decorative background pattern -->
+      <div class="login-decorative-grid" aria-hidden="true"></div>
+    </div>
+
+    <!-- Right Panel: Login Form -->
+    <div class="login-form-panel">
+      <div class="login-card card">
+        <div class="login-card-body">
+          <h2 class="login-form-title">{{ 'login.title' | translate }}</h2>
+          <p class="login-form-subtitle">{{ 'login.subtitle' | translate }}</p>
+
+          @if (error) {
+            <div class="alert alert--error" role="alert">
+              <div class="alert-message">{{ error }}</div>
+            </div>
+          }
+
+          <form [formGroup]="form" (ngSubmit)="onSubmit()" class="login-form">
+            <div class="form-group">
+              <label class="form-label form-label--required" for="email">
+                {{ 'login.email' | translate }}
+              </label>
+              <input
+                id="email"
+                type="email"
+                class="form-input"
+                [class.form-input--error]="form.get('email')?.invalid && form.get('email')?.touched"
+                formControlName="email"
+                placeholder="user@example.com"
+                required
+                autocomplete="email"
+              />
+              @if (form.get('email')?.invalid && form.get('email')?.touched) {
+                <span class="form-error">{{ 'login.email.error' | translate }}</span>
+              }
+            </div>
+
+            <div class="form-group">
+              <label class="form-label form-label--required" for="password">
+                {{ 'login.password' | translate }}
+              </label>
+              <input
+                id="password"
+                type="password"
+                class="form-input"
+                [class.form-input--error]="form.get('password')?.invalid && form.get('password')?.touched"
+                formControlName="password"
+                placeholder="••••••••"
+                required
+                autocomplete="current-password"
+              />
+              @if (form.get('password')?.invalid && form.get('password')?.touched) {
+                <span class="form-error">{{ 'login.password.error' | translate }}</span>
+              }
+            </div>
+
+            <button
+              type="submit"
+              class="btn btn--primary btn--block btn--lg"
+              [disabled]="form.invalid || loading"
+            >
+              @if (loading) {
+                <span class="spinner spinner--sm"></span>
+                <span>{{ 'login.loading' | translate }}</span>
+              } @else {
+                <span>{{ 'login.submit' | translate }}</span>
+              }
+            </button>
+          </form>
+        </div>
+
+        <div class="login-card-footer">
+          <p class="u-text-sm u-text-muted u-text-center u-mb-0">
+            &copy; {{ 'app.copyright.short' | translate}}
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+} @else {
+  <!-- Authenticated state -->
+  <div class="login-container">
+    <div class="login-form-panel u-mx-auto">
+      <div class="card u-max-w-md">
+        <div class="card-body u-text-center">
+          <h2 class="card-title">{{ 'login.authenticated' | translate }}</h2>
+          <p class="u-text-muted u-mb-lg">{{ 'login.authenticated.message' | translate }}</p>
+          <button
+            type="button"
+            class="btn btn--secondary"
+            (click)="logout()"
+          >
+            {{ 'app.logout' | translate }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+}
