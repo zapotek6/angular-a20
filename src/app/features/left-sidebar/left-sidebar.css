@@ -1,3 +1,18 @@
+.toolbar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--color-surface-2);
+  height: 100%;
+}
 
+.icon {
+  width: 32px;
+  height: 32px;
+}
+
+.space {
+  height: 30px;
+}
 
 /*# sourceMappingURL=left-sidebar.css.map */

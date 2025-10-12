@@ -7,13 +7,15 @@ import { MetricsService } from '../../../utils/metrics.service';
 import {AuthService} from '../../auth/auth.service';
 import {environment} from '../../../../environments/environment';
 import {Filters, Links, PaginationResponse} from './pagination';
+import {Converter} from './interfaces';
 
-@Injectable({ providedIn: 'root' })
-export class RepositoryBase {
+//@Injectable({ providedIn: 'root' })
+export class RepositoryBase<DTO, MODEL> {
   private inflight = new Map<string, Observable<any>>();
   private readonly nav$ = new Subject<void>();
 
   constructor(
+    private converter: Converter<DTO, MODEL>,
     protected http: HttpClient,
     protected cache: CacheStore,
     router: Router,
@@ -31,16 +33,16 @@ export class RepositoryBase {
     return environment.apiUrl + '/api/v1/' + tenant_id + '/' + apiResourceName
   }
 
-  protected getList<T>(key: string, url: string, params?: Record<string, any>, ttlMs = 60_000): Observable<PaginationResponse<T>> {
-    const fresh = this.cache.get<T>(key);
+  protected getList(key: string, url: string, params?: Record<string, any>, ttlMs = 60_000): Observable<PaginationResponse<MODEL>> {
+    const fresh = this.cache.get<MODEL>(key);
     if (fresh) {
       // Provide cached quickly
       // Note: background refresh can be implemented by callers on focus/online using fetchList again.
       let response = {
-        data: fresh.data as T[],
+        data: fresh.data as MODEL[],
         pagination: {
           limit: -1,
-          returned: (fresh.data as T[]).length,
+          returned: (fresh.data as MODEL[]).length,
           has_next: false,
           next_cursor: null,
           links: {
@@ -52,7 +54,7 @@ export class RepositoryBase {
           sort: [],
         }
       }
-      return of(response as PaginationResponse<T>);
+      return of(response as PaginationResponse<MODEL>);
     }
 
     const dedupKey = `GET|${key}`;
@@ -77,18 +79,22 @@ export class RepositoryBase {
       return inFlight as Observable<T>;
     }*/
 
-    const entry = this.cache.peek<T>(key);
+    const entry = this.cache.peek<MODEL>(key);
     const ifNoneMatch = entry?.etag;
 
     const httpParams = new HttpParams({ fromObject: params ?? {} });
     const headers = ifNoneMatch ? new HttpHeaders({ 'If-None-Match': ifNoneMatch}) : undefined;
     headers?.append(this.auth.get_xsrf_header_name(), this.auth.get_xsrf_token());
     const req$ = this.http
-      .get<PaginationResponse<T>>(url, { observe: 'response', params: httpParams, headers, withCredentials: true })
+      .get<PaginationResponse<DTO>>(url, { observe: 'response', params: httpParams, headers, withCredentials: true })
       .pipe(
-        map((resp: HttpResponse<PaginationResponse<T>>) => {
+        map((resp: HttpResponse<PaginationResponse<DTO>>) => {
           const etag = resp.headers.get('ETag') || resp.headers.get('Etag') || resp.headers.get('etag') || undefined;
-          let body = resp.body as PaginationResponse<T> | null;
+          let body = resp.body as PaginationResponse<DTO> | null;
+          let data = Array.from(resp.body?.data ?? []);
+          let models = data.map<MODEL>(dto => {
+            return this.converter.fromDto(dto);
+          });
           /*if (!body) {
             const cached = this.cache.peek<T>(key)?.data;
             if (cached) body = cached;
@@ -97,7 +103,10 @@ export class RepositoryBase {
             this.cache.set<T>(key, body, etag ?? entry?.etag, ttlMs);
             this.cache.setUrlMeta(resp.url ?? url, { etag: etag ?? entry?.etag, body });
           }*/
-          return body as PaginationResponse<T>;
+          return {
+            data: models,
+            pagination: resp.body?.pagination ?? {}
+          } as PaginationResponse<MODEL>;
         }),
         finalize(() => this.inflight.delete(dedupKey)),
         takeUntil(this.nav$),

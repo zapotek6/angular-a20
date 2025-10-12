@@ -9,32 +9,40 @@ import { OnlineFocusService } from '../../../utils/online-focus.service';
 import {environment} from '../../../../environments/environment';
 import {AuthService} from '../../auth/auth.service';
 import {GenericRepository} from './generic.repository';
+import {Item} from '../../models/item';
 
-export interface Item {
+export type ItemDto = {
   name: string;
   value: string;
-  id: string;
-  version: number;
-  tenant_id: string;
-  location: string;
-  resource_type: string;
-  created_at: string;
-  updated_at: string;
-  created_by: string;
-  updated_by: string;
+  id?: string;
+  version?: number;
+  tenant_id?: string;
+  location?: string;
+  resource_type?: string;
+  created_at?: string;
+  updated_at?: string;
+  created_by?: string;
+  updated_by?: string;
 }
+
+export const ItemConverter = {
+  fromDto: (d: ItemDto) =>
+    new Item(d.name, d.value),
+  toDto: (m: Item): ItemDto =>
+    m
+};
 
 export const ITEM_RESOURCE_NAME = 'items';
 
 @Injectable({ providedIn: 'root' })
-export class ItemsRepository extends GenericRepository<Item> {
+export class ItemsRepository extends GenericRepository<ItemDto, Item> {
   constructor(online: OnlineFocusService,
               http: HttpClient,
               cache: CacheStore,
               router: Router,
               metrics: MetricsService,
               auth: AuthService) {
-    super(ITEM_RESOURCE_NAME, online, http, cache, router, metrics, auth);
+    super(ITEM_RESOURCE_NAME, ItemConverter, online, http, cache, router, metrics, auth);
   }
 }
 

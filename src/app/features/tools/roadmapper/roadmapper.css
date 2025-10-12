@@ -1,0 +1,104 @@
+svg {
+  background-color: rgba(255, 246, 228, 0.45);
+}
+
+.pmo {
+  line-height: 1.2rem;
+  font-size: var(--font-size-sm);
+  rx: 1%;
+  ry: 1%;
+  filter: url(#softShadow);
+}
+
+.pmo .ss {
+  fill: var(--color-pmo-ss);
+}
+
+.pmo .ts {
+  fill: var(--color-pmo-ts);
+}
+
+.pmo .us {
+  fill: var(--color-pmo-us);
+}
+
+.pmo .pill {
+  fill: gray;
+  rx: 0;
+  ry: 0;
+  font-size: var(--font-size-small);
+}
+
+.pmo rect.pill.delayed {
+  fill: red;
+}
+
+.pmo text.pill.delayed {
+  text-align: center;
+  fill: white;
+  user-select: none;
+  padding: var(--space-xs);
+}
+
+.pmo text.id {
+  font-weight: 700;
+  fill: white;
+  user-select: none;
+}
+
+.pmo rect.id {
+  fill: blue;
+}
+
+.pmo text.key {
+  text-align: center;
+  font-weight: 1000;
+  font-style: italic;
+  fill: black;
+  user-select: none;
+}
+
+.pmo rect.key {
+  fill: none;
+}
+
+.pmo text.title {
+  text-align: center;
+  font-weight: 700;
+  fill: darkblue;
+  user-select: none;
+}
+
+.pmo rect.title {
+  fill: none;
+}
+
+.node .title, .node .meta, .node .ticket {
+  fill: #444;
+}
+
+.node .meta {
+  fill: #777;
+}
+
+.node .ticket {
+  fill: #666;
+  font-weight: 600;
+}
+
+.node:hover rect.card {
+  stroke: #666;
+  stroke-width: 1.5;
+}
+
+.link {
+  fill: none;
+  stroke: #9a79cf;
+  stroke-width: 2;
+}
+
+.dragging {
+  cursor: grabbing;
+}
+
+/*# sourceMappingURL=roadmapper.css.map */

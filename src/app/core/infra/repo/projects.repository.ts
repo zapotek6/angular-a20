@@ -7,8 +7,11 @@ import { OnlineFocusService } from '../../../utils/online-focus.service';
 import {AuthService} from '../../auth/auth.service';
 import {GenericRepository} from './generic.repository';
 import {Pagination} from './pagination';
+import {Pmo} from '../../models/pmo';
+import {PmoDto} from './pmo.repository';
+import {Project} from '../../models/project';
 
-export interface Project {
+export type ProjectDto = {
   project_id: string;
   name: string;
   description: string;
@@ -23,16 +26,26 @@ export interface Project {
   updated_by: string;
 }
 
+export const ProjectConverter = {
+  fromDto: (d: ProjectDto) => {
+    const p = new Project();
+    Object.assign(p, d);
+    return p;
+  },
+  toDto: (m: Project): ProjectDto =>
+    m
+};
+
 export const PROJECT_RESOURCE_NAME = 'projects';
 
 @Injectable({ providedIn: 'root' })
-export class ProjectsRepository extends GenericRepository<Project> {
+export class ProjectsRepository extends GenericRepository<ProjectDto, Project> {
   constructor(online: OnlineFocusService,
               http: HttpClient,
               cache: CacheStore,
               router: Router,
               metrics: MetricsService,
               auth: AuthService) {
-    super(PROJECT_RESOURCE_NAME, online, http, cache, router, metrics, auth);
+    super(PROJECT_RESOURCE_NAME, ProjectConverter, online, http, cache, router, metrics, auth);
   }
 }

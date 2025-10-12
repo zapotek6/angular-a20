@@ -1,6 +1,6 @@
 import {inject, Injectable} from '@angular/core';
 import {ItemsRepository} from '../infra/repo/items.repository';
-import {Project, ProjectsRepository} from '../infra/repo/projects.repository';
+import {ProjectDto, ProjectsRepository} from '../infra/repo/projects.repository';
 import {AuthEvent, AuthService, BROADCAST_LOGOUT} from '../auth/auth.service';
 import {OnlineFocusService} from '../../utils/online-focus.service';
 import {HttpClient} from '@angular/common/http';
@@ -12,6 +12,8 @@ import {LoggerService} from '../logger/logger.service';
 import {Logger, LogSeverity} from '../logger/logger';
 import {Item} from '../models/item';
 import {BroadcasterService} from '../brodacaster.service';
+import {PmosRepository} from '../infra/repo/pmo.repository';
+import {Pmo} from '../models/pmo';
 
 export enum WorkspaceState { NotReady = 'WORKSPACE-NOTREADY', Ready = 'WORKSPACE-READY'}
 
@@ -20,9 +22,10 @@ export class WorkspaceService {
   auth: AuthService = inject(AuthService);
   itemsRepo: ItemsRepository;
   projectsRepo: ProjectsRepository;
+  pmosRepo: PmosRepository;
   tenant_id?: string;
   status= WorkspaceState.NotReady;
-  project?: Project;
+  project?: ProjectDto;
   logger: Logger;
   bcast: BroadcasterService;
 
@@ -32,7 +35,7 @@ export class WorkspaceService {
     this.bcast = new BroadcasterService(this.logger);
     this.itemsRepo = new ItemsRepository(inject(OnlineFocusService), inject(HttpClient), inject(CacheStore), inject(Router), inject(MetricsService), inject(AuthService));
     this.projectsRepo = new ProjectsRepository(inject(OnlineFocusService), inject(HttpClient), inject(CacheStore), inject(Router), inject(MetricsService), inject(AuthService));
-
+    this.pmosRepo = new PmosRepository(inject(OnlineFocusService), inject(HttpClient), inject(CacheStore), inject(Router), inject(MetricsService), inject(AuthService));
   }
 
   deInit() {
@@ -42,7 +45,7 @@ export class WorkspaceService {
     this.bcast.broadcast({type: this.status});
   }
 
-  init(tenant_id: string, project: Project): boolean {
+  init(tenant_id: string, project: ProjectDto): boolean {
     if (tenant_id.length == 0 || project.id.length == 0) {
       this.status = WorkspaceState.NotReady;
     } else {
@@ -80,10 +83,31 @@ export class WorkspaceService {
         }
       })
     })
-
-
   }
 
+  getPmos() {
+    this.guardOk();
+    return new Observable<Pmo[]>((subscriber) => {
+      this.pmosRepo.getAll(this.tenant_id ?? "", {'path': this.project?.location}).subscribe({
+        next: (pmos) => {
+          subscriber.next(pmos);
+        },
+        error: (err) => {
+          if (err.status == 401) {
+            this.bcast.broadcast({type: AuthEvent.ApiAuthFail});
+          }
+          subscriber.error(err);
+        },
+        complete: () => {
+          subscriber.complete();
+        }
+      })
+    })
+  }
+
+  isReady() {
+    return this.status == WorkspaceState.Ready;
+  }
   /*fetchAll(): Observable<boolean> {
     this.guardOk();
 

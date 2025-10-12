@@ -15,8 +15,20 @@
 }
 
 .card:hover {
-  width: 30rem;
-  height: 8rem;
+  width: 40rem;
+  height: 18rem;
+}
+
+.ts {
+  background: var(--color-pmo-ts);
+}
+
+.ss {
+  background: var(--color-pmo-ss);
+}
+
+.detail {
+  padding: 0.2rem;
 }
 
 /*# sourceMappingURL=pmo-card.css.map */

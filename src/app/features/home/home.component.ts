@@ -4,18 +4,19 @@ import {AuthService, BROADCAST_LOGOUT} from '../../core/auth/auth.service';
 import {Router} from '@angular/router';
 import {Subscription} from 'rxjs';
 import {WorkspaceService, WorkspaceState} from '../../core/workspace/workspace.service';
-import {Project, ProjectsRepository} from '../../core/infra/repo/projects.repository';
+import {ProjectDto, ProjectsRepository} from '../../core/infra/repo/projects.repository';
 import {Logger, LogSeverity} from '../../core/logger/logger';
 import {LoggerService} from '../../core/logger/logger.service';
 import {FormsModule} from '@angular/forms';
 import {Lister} from '../tools/lister/lister';
 import {BroadcasterService} from '../../core/brodacaster.service';
 import {AvailableTools, LeftSidebar} from '../left-sidebar/left-sidebar';
+import {Roadmapper} from '../tools/roadmapper/roadmapper';
 
 @Component({
   standalone: true,
   selector: 'app-home',
-  imports: [TranslateModule, FormsModule, Lister, LeftSidebar],
+  imports: [TranslateModule, FormsModule, Lister, LeftSidebar, Roadmapper],
   templateUrl: './home.component.html',
   styleUrl: './home.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -24,7 +25,7 @@ export class HomeComponent implements OnInit, OnDestroy {
   private sub?: Subscription;
   ready = false;
 
-  projects: Project[] = [];
+  projects: ProjectDto[] = [];
   curr_project_uuid: string | null = null;
 
   defaultTool: AvailableTools = AvailableTools.LISTER;
@@ -54,6 +55,9 @@ export class HomeComponent implements OnInit, OnDestroy {
         }
         if (message?.type === AvailableTools.LISTER) {
           this.activeTool = AvailableTools.LISTER;
+        }
+        if (message?.type === AvailableTools.ROADMAPPER) {
+          this.activeTool = AvailableTools.ROADMAPPER;
         }
         if (message?.type === AvailableTools.DUMMY) {
           this.activeTool = AvailableTools.DUMMY;

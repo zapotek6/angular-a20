@@ -1,4 +1,16 @@
-<div class="card pmoSS" [class]="{'expand': expand}">
-  <div class="card-header" (click)="toggleExpand()">{{pmo?.name}}</div>
-  <div class="card-body">{{pmo?.name}}</div>
+<div class="card"
+     [class]="pmo?.kind?.toLowerCase()"
+     [class.expand]="expand">
+  <div class="card-header" (click)="toggleExpand()">{{ pmo?.key || '' }}</div>
+  <div class="card-body">
+    <div class="detail">{{ pmo?.id }}</div>
+    <div class="detail">{{ pmo?.name }}</div>
+    <div class="detail">{{ pmo?.description }}</div>
+    <div class="detail">{{ pmo?.category }}</div>
+    <div style="max-height: 3rem;">Dependencies
+      @for (link of pmo?.links || []; track pmo?.id) {
+        <div class="detail">{{ link?.to?.project_id + '::' + link?.to?.key }}</div>
+      }
+    </div>
+  </div>
 </div>

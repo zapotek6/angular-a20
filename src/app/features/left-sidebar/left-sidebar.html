@@ -1,2 +1,10 @@
-<div (click)="activateTool(AvailableTools.LISTER)">Lister</div>
-<div (click)="activateTool(AvailableTools.DUMMY)">Dummy</div>
+<div class="toolbar">
+  <div class="space"></div>
+  <div class="icon" (click)="activateTool(AvailableTools.LISTER)"><img src="/assets/list.png" alt="Lister"></div>
+  <div class="space"></div>
+  <div class="icon" (click)="activateTool(AvailableTools.ROADMAPPER)"><img src="/assets/graph.png" alt="Roadmapper">
+  </div>
+  <div class="space"></div>
+  <div class="icon" (click)="activateTool(AvailableTools.DUMMY)"><img src="/assets/dummy.png" alt="Dummy"></div>
+  <div class="space"></div>
+</div>

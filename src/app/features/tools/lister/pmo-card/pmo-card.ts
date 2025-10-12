@@ -1,21 +1,23 @@
-import {ChangeDetectionStrategy, Component, Input} from '@angular/core';
+import {ChangeDetectionStrategy, Component, Input, OnInit} from '@angular/core';
 import {Logger, LogSeverity} from '../../../../core/logger/logger';
 import {AuthService} from '../../../../core/auth/auth.service';
 import {WorkspaceService} from '../../../../core/workspace/workspace.service';
 import {LoggerService} from '../../../../core/logger/logger.service';
-import {Item} from '../../../../core/models/item';
 import {BroadcasterService} from '../../../../core/brodacaster.service';
+import {Pmo} from '../../../../core/models/pmo';
+import {NgClass} from '@angular/common';
 
 @Component({
   selector: 'app-pmo-card',
   imports: [
+    NgClass
   ],
   templateUrl: './pmo-card.html',
   styleUrl: './pmo-card.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class PmoCard {
-  @Input() pmo?: Item;
+export class PmoCard implements OnInit {
+  @Input() pmo?: Pmo;
   logger: Logger;
   bcast: BroadcasterService;
 
@@ -30,7 +32,7 @@ export class PmoCard {
   }
 
   ngOnInit() {
-    this.logger.debug('ngOnInit', "PmoCardComponent.ngOnInit() called");
+    this.logger.debug('ngOnInit');
     /*if (this.pmo_uuid) {
       this.workspace.itemsRepo?.read(this.workspace.tenant_id ?? "", this.pmo_uuid).subscribe({
         next: (item) => {
@@ -42,6 +44,11 @@ export class PmoCard {
         }
       })
     }*/
+  }
+
+  update(): void { //Observable<ItemDto> {
+
+    //return this.workspace.itemsRepo.update(this.workspace.tenant_id ?? "", this.pmo?.id ?? "", this.pmo )
   }
 
   toggleExpand() {

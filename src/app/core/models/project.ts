@@ -1,8 +1,9 @@
-export class Item {
+export class Project {
+  project_id: string = "";
   name: string = "";
-  value: string = "";
+  description: string = "";
   id: string = "";
-  version: number = 1;
+  version: number = 0;
   tenant_id: string = "";
   location: string = "";
   resource_type: string = "";
@@ -10,9 +11,4 @@ export class Item {
   updated_at: string = "";
   created_by: string = "";
   updated_by: string = "";
-
-  constructor(name: string, value: string) {
-    this.name = name;
-    this.value = value;
-  }
 }

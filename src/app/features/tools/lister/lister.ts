@@ -10,11 +10,11 @@ import {
 import {WorkspaceService, WorkspaceState} from '../../../core/workspace/workspace.service';
 import {LoggerService} from '../../../core/logger/logger.service';
 import {Logger, LogSeverity} from '../../../core/logger/logger';
-import {Item} from '../../../core/models/item';
 import {PmoCard} from './pmo-card/pmo-card';
 import {BroadcasterService} from '../../../core/brodacaster.service';
 import {AvailableTools, LeftSidebar} from '../../left-sidebar/left-sidebar';
 import {ReactiveFormsModule} from '@angular/forms';
+import {Pmo} from '../../../core/models/pmo';
 
 @Component({
   selector: 'app-lister',
@@ -27,7 +27,7 @@ import {ReactiveFormsModule} from '@angular/forms';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class Lister implements OnInit, OnChanges, AfterContentInit {
-  pmos?: Item[];
+  pmos?: Pmo[];
   logger: Logger;
   bcast: BroadcasterService;
 
@@ -75,9 +75,9 @@ export class Lister implements OnInit, OnChanges, AfterContentInit {
     this.cdr.detectChanges();
   }
   refreshData() {
-    this.workspace.getItems().subscribe({
-      next: (items) => {
-        this.pmos = [...items];
+    this.workspace.getPmos().subscribe({
+      next: (pmos) => {
+        this.pmos = [...pmos];
         this.cdr.detectChanges();
         this.logger.debug('refreshData', 'Pmo read Success', this.pmos);
       },
