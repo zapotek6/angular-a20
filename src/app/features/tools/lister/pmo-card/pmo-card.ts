@@ -9,9 +9,7 @@ import {NgClass} from '@angular/common';
 
 @Component({
   selector: 'app-pmo-card',
-  imports: [
-    NgClass
-  ],
+  imports: [],
   templateUrl: './pmo-card.html',
   styleUrl: './pmo-card.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
