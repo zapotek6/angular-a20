@@ -53,7 +53,7 @@ export class Lister implements OnInit, OnChanges, AfterContentInit {
   ngOnInit() {
     this.logger.debug('ngOnInit');
     this.bcast.onMessage((message) => {
-      this.logger.debug("onMessage", message);
+      //this.logger.debug("onMessage", message);
       if (message?.type === WorkspaceState.Ready) {
         this.logger.debug('WorkspaceService Ready');
         this.refreshData();

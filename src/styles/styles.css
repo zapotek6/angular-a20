@@ -1,7 +1,11 @@
+@charset "UTF-8";
 /* ============================================================================
    Global Styles Entry Point
    ============================================================================ */
 /* 1) Import auto-generated design tokens first */
+/* 2) Declare CSS layer order */
+@import "primeicons/primeicons.css";
+@import "primeflex/primeflex.css";
 /**
  * Do not edit directly, this file was auto-generated.
  */
@@ -61,14 +65,29 @@
   --shadows-lg: 0px 8px 16px #000000;
   --shadows-multi: 0px 4px 12px #000000, 0px 8px 16px #000000;
   --color-brand-primary: #0d9488;
+  --color-pmo-pg: #e6e6ff;
+  --color-pmo-pj: #0066ff;
+  --color-pmo-ml: #ffd9b3;
+  --color-pmo-ob: #ffffcc;
+  --color-pmo-uc: #c299ff;
+  --color-pmo-us: #00cc66;
+  --color-pmo-ss: #f2ffcc;
+  --color-pmo-ts: #ffcce6;
+  --color-pmo-rk: #ff3ce6;
+  --color-pmo-as: #ffc34d;
+  --color-pmo-df: #b3b3cc;
+  --color-pmo-id: #00cc66;
+  --color-pmo-fl: #b3b3cc;
+  --color-pmo-qs: #f2ffcc;
+  --color-pmo-pr: #ffcce6;
   --size-font-base: 16px;
 }
 
-/* 2) Declare CSS layer order */
 @layer reset, base, tokens, theme, components, utilities, overrides;
 /* ============================================================================
    Design Token System - Semantic Layer
    ============================================================================ */
+/* Utility layout */
 @layer tokens {
   :root {
     /* ===== Color System ===== */
@@ -81,7 +100,7 @@
     /* Surface colors (for cards, panels) */
     --color-surface-1: #ffffff;
     --color-surface-2: #f8f9fa;
-    --color-surface-3: #fef5dd;
+    --color-surface-3: #e9ecef;
     /* Border colors */
     --color-border-base: #dee2e6;
     --color-border-strong: #adb5bd;
@@ -423,6 +442,27 @@
     h3 {
       page-break-after: avoid;
     }
+  }
+  .p-inputtext, .p-button {
+    border-radius: var(--radius);
+  }
+  /* Variante 'compact' globale */
+  .p-inputtext.p-inputtext-sm,
+  .p-button.p-button-sm {
+    padding: var(--padY) var(--padX);
+  }
+  /* Tabelle PrimeNG compatte (se le usi) */
+  .table-compact .p-datatable-thead > tr > th,
+  .table-compact .p-datatable-tbody > tr > td {
+    padding: 4px 8px;
+  }
+  /* AG Grid compatta */
+  .ag-theme-alpine {
+    --ag-font-size: 13px;
+    --ag-list-item-height: 28px;
+    --ag-row-height: 30px;
+    --ag-header-height: 32px;
+    --ag-border-color: var(--border);
   }
 }
 @layer theme {
@@ -828,7 +868,7 @@
     box-shadow: var(--shadow-md);
   }
   .card-header {
-    padding: var(--space-sm);
+    padding: var(--space-xs);
     border-bottom: 1px solid var(--color-border-subtle);
   }
   .card-body {
@@ -1213,6 +1253,45 @@
   }
   .progress--lg {
     height: 0.75rem;
+  }
+  /* —— p-select “compact” preset —— */
+  /* Riduce font, padding e altezza del campo */
+  .p-select.compact {
+    font-size: 0.875rem; /* 14px */
+  }
+  .p-select.compact .p-select-label {
+    padding: 0.25rem 0.5rem; /* vertical x horizontal */
+    line-height: 1.15;
+    min-height: 1.9rem; /* ~30px totali */
+  }
+  /* Icona freccia e clear più piccole e strette */
+  .p-select.compact .p-select-trigger {
+    width: 1.5rem; /* freccia più vicina */
+  }
+  .p-select.compact .p-select-trigger .p-icon,
+  .p-select.compact .p-select-clear-icon {
+    font-size: 0.9rem;
+  }
+  /* Input filtro nel pannello più compatto */
+  .p-select-panel .p-select-filter {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+    min-height: 2rem;
+  }
+  /* Voci del menu più dense */
+  .p-select-panel .p-select-items .p-select-item {
+    padding: 0.25rem 0.5rem;
+    line-height: 1.2;
+  }
+  /* Spazio intestazione/piede pannello (se presenti) */
+  .p-select-panel .p-select-header,
+  .p-select-panel .p-select-footer {
+    padding: 0.25rem 0.5rem;
+  }
+  /* (opzionale) Raggio e bordo più “flat” */
+  .p-select.compact .p-select-label,
+  .p-select.compact .p-select-trigger {
+    border-radius: 0.375rem; /* 6px */
   }
 }
 @layer utilities {

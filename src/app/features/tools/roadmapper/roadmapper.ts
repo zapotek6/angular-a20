@@ -102,6 +102,7 @@ type StyleContext = {
 
 const svgns = "http://www.w3.org/2000/svg";
 
+export enum RoadMapperEvents { PMO_SELECTED = 'ROADMAPPER-PMO_SELECTED'}
 
 @Component({
   selector: 'app-roadmapper',
@@ -177,41 +178,6 @@ export class Roadmapper implements OnInit, AfterViewInit {
         this.refresh();
       }
     });
-    /*let nodesArray = [
-      {
-        id: "n1", code: "TS.82", title: "Include oauth-2 token in Kibana Logs", meta: "roberta.gotti · 1d",
-        ticket: "CUA-278", x: 140, y: 120, w: 220, h: 51, pill: {
-          visible: true, text: "Delayed", class: "delayed"
-        }
-      },
-      {
-        id: "n2", code: "TS.84", title: "Return 401 Unauthorized for expired tokens", meta: "roberta.gotti · 4d",
-        ticket: "CUA-276", x: 140, y: 250, w: 240, h: 90, pill: {
-          visible: true, text: "Delayed", class: "delayed"
-        }
-      },
-      {
-        id: "n3", code: "TS.86", title: "ATD OAuth2 #2", meta: "stefano.quartana · 1d",
-        ticket: "", x: 430, y: 200, w: 201, h: 81, pill: {
-          visible: true, text: "Delayed", class: "delayed"
-        }
-      },
-      {
-        id: "n4", code: "TS.57", title: "APP:COMAPP validazione", meta: "marco.bagattini · 14d",
-        ticket: "", x: 680, y: 150, w: 210, h: 82, pill: {
-          visible: true, text: "Delayed", class: "delayed"
-        }
-      }
-    ];
-    this.links = [
-      {id: "l1", from: "n1", to: "n3"},
-      {id: "l2", from: "n2", to: "n3"},
-      {id: "l3", from: "n3", to: "n4"}
-    ];
-
-    this.nodes = new Map<string, NodeModel>(nodesArray.map(n => [n.id, n]));
-
-    this.nodeById = this.nodes;*/
   }
 
   ngAfterViewInit() {
@@ -243,6 +209,7 @@ export class Roadmapper implements OnInit, AfterViewInit {
         this.nodeById = this.nodes;
         this.links = linksArray;
 
+        this.cleanUpNodesAndLinks();
         this.drawNodes();
         this.drawLinks();
       }
@@ -538,6 +505,11 @@ export class Roadmapper implements OnInit, AfterViewInit {
     return parseFloat(getComputedStyle(child).fontSize);
   }
 
+
+  private cleanUpNodesAndLinks() {
+    this.gNodes?.replaceChildren();
+    this.gLinks?.replaceChildren();
+  }
   private drawNodes(): void {
     this.nodes.forEach(n => {
       const g = this.createEl("g", {class: "pmo", transform: `translate(${n.x},${n.y})`}, this.gNodes);
@@ -587,12 +559,19 @@ export class Roadmapper implements OnInit, AfterViewInit {
       }*/
 
       this.makeDraggable(g, n);
+      this.makeClickable(g, n.id);
+    });
+  }
+
+
+  private makeClickable(group: SVGGElement, id: string) {
+    group.addEventListener('click', e => {
+      this.bcast.broadcast({ type: RoadMapperEvents.PMO_SELECTED, id: id });
     });
   }
 
   /* ---- Drag logic (pointer events) ---- */
   drag: DragState | null = null;
-
   private makeDraggable(group: SVGGElement, model: NodeModel): void {
     group.style.cursor = "grab";
 
@@ -699,10 +678,6 @@ export class Roadmapper implements OnInit, AfterViewInit {
       (this.stage as SVGSVGElement).style.cursor = "default";
     });
   }
-
-  /* ---- initial render ---- */
-// drawNodes();
-// drawLinks();
 
   zoom = 1;
   viewBox = { x: 0, y: 0, w: 2000, h: 2000 };

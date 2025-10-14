@@ -1,0 +1,24 @@
+<p>{{ pmo?.id || "undefined" }}</p>
+<div>
+  <p-tag
+    [value]="pmo?.key || ''"
+    severity="info"></p-tag>
+</div>
+<div>
+  <p-iftalabel>
+    <input pInputText id="category" [readonly]="true" [ngModel]="pmo?.category" autocomplete="off"/>
+    <label for="category">Category</label>
+  </p-iftalabel>
+</div>
+<div>
+  <p-iftalabel>
+    <input pInputText id="name" [readonly]="true" [ngModel]="pmo?.name" autocomplete="off"/>
+    <label for="name">Title</label>
+  </p-iftalabel>
+</div>
+<div>
+  <p-iftalabel>
+    <input pInputText id="owner" [readonly]="true" [ngModel]="pmo?.owner_email" autocomplete="off"/>
+    <label for="owner">Owner</label>
+  </p-iftalabel>
+</div>

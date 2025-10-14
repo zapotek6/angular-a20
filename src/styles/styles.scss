@@ -13,6 +13,10 @@
    Design Token System - Semantic Layer
    ============================================================================ */
 
+@import "primeicons/primeicons.css";
+/* Utility layout */
+@import "primeflex/primeflex.css";
+
 @layer tokens {
   :root {
     /* ===== Color System ===== */
@@ -146,6 +150,7 @@
 
 @layer components {
   @include meta.load-css('components');
+  @include meta.load-css('primeng');
 }
 
 @layer utilities {

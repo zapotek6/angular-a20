@@ -14,6 +14,12 @@ import {I18nService} from './i18n/i18n.service';
 import {WorkspaceService} from './core/workspace/workspace.service';
 import {LoggerService} from './core/logger/logger.service';
 
+import { provideAnimations } from '@angular/platform-browser/animations';
+import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
+import { providePrimeNG } from 'primeng/config';
+import Aura from '@primeuix/themes/aura';
+import {NgControl} from '@angular/forms';
+
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
@@ -29,5 +35,13 @@ export const appConfig: ApplicationConfig = {
     OnlineFocusService,
     WorkspaceService,
     LoggerService,
+    provideAnimations(),
+    provideAnimationsAsync(),
+    providePrimeNG({
+      theme: {
+        preset: Aura,            // puoi provare anche Lara, Material, Nora
+        options: { darkModeSelector: '.theme-dark' } // opzionale
+      }
+    })
   ]
 };

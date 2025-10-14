@@ -1,22 +1,38 @@
 import {ChangeDetectionStrategy, Component, OnDestroy, OnInit, inject, ChangeDetectorRef} from '@angular/core';
 import {TranslateModule} from '@ngx-translate/core';
-import {AuthService, BROADCAST_LOGOUT} from '../../core/auth/auth.service';
+import {AuthEvent, AuthService, BROADCAST_LOGOUT} from '../../core/auth/auth.service';
 import {Router} from '@angular/router';
-import {Subscription} from 'rxjs';
+import {filter, Subscription} from 'rxjs';
 import {WorkspaceService, WorkspaceState} from '../../core/workspace/workspace.service';
 import {ProjectDto, ProjectsRepository} from '../../core/infra/repo/projects.repository';
 import {Logger, LogSeverity} from '../../core/logger/logger';
 import {LoggerService} from '../../core/logger/logger.service';
-import {FormsModule} from '@angular/forms';
+import {FormControl, FormGroup, FormsModule, NgControl, ReactiveFormsModule} from '@angular/forms';
 import {Lister} from '../tools/lister/lister';
 import {BroadcasterService} from '../../core/brodacaster.service';
 import {AvailableTools, LeftSidebar} from '../left-sidebar/left-sidebar';
 import {Roadmapper} from '../tools/roadmapper/roadmapper';
+import {Button, ButtonDirective} from 'primeng/button';
+import {InputText} from 'primeng/inputtext';
+import {Select, SelectChangeEvent} from 'primeng/select';
+import {PmoDetail} from '../tools/roadmapper/pmo-detail/pmo-detail';
 
 @Component({
   standalone: true,
   selector: 'app-home',
-  imports: [TranslateModule, FormsModule, Lister, LeftSidebar, Roadmapper],
+  imports: [
+    TranslateModule,
+    FormsModule,
+    ReactiveFormsModule,
+    Lister,
+    LeftSidebar,
+    Roadmapper,
+    ButtonDirective,
+    InputText,
+    Select,
+    Button,
+    PmoDetail
+  ],
   templateUrl: './home.component.html',
   styleUrl: './home.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -46,50 +62,58 @@ export class HomeComponent implements OnInit, OnDestroy {
     this.bcast = new BroadcasterService(this.logger);
   }
 
+  projectForm = new FormGroup({
+    project_id: new FormControl<string | null>(this.curr_project_uuid)
+  });
+
+  /*form = new FormGroup({
+    project_id: new FormControl<string | null>(this.curr_project_uuid)
+  });*/
+
   ngOnInit(): void {
     this.logger.debug('ngOnInit', "HomeComponent.ngOnInit() called");
 
-      this.bcast.onMessage((message) => {
-        if (message?.type === WorkspaceState.Ready) {
-          this.logger.debug('WorkspaceService Ready');
-        }
-        if (message?.type === AvailableTools.LISTER) {
-          this.activeTool = AvailableTools.LISTER;
-        }
-        if (message?.type === AvailableTools.ROADMAPPER) {
-          this.activeTool = AvailableTools.ROADMAPPER;
-        }
-        if (message?.type === AvailableTools.DUMMY) {
-          this.activeTool = AvailableTools.DUMMY;
-        }
-      });
-    // If somehow reached without being authenticated, ensure redirect
-    /*if (!this.auth.isAuthenticated()) {
-      this.router.navigateByUrl('/login');
-      return;
-    }*/
+    this.bcast.onMessage((message) => {
+      if (message?.type === WorkspaceState.Ready) {
+        this.logger.debug('WorkspaceService Ready');
+      }
+      if (message?.type === AvailableTools.LISTER) {
+        this.activeTool = AvailableTools.LISTER;
+      }
+      if (message?.type === AvailableTools.ROADMAPPER) {
+        this.activeTool = AvailableTools.ROADMAPPER;
+      }
+      if (message?.type === AvailableTools.DUMMY) {
+        this.activeTool = AvailableTools.DUMMY;
+      }
+      this.cdr.detectChanges();
+    });
+
     // Watch for logout while on this page
     this.sub = this.auth.authChanges$.subscribe((s) => {
       if (!s) {
         this.router.navigateByUrl('/login');
       }
     });
+    this.projectForm.controls.project_id.valueChanges.subscribe(value => {
+      if (value) {
+        if (this.curr_project_uuid != value) {
+          this.curr_project_uuid = value;
+          this.onProjectChange({
+            originalEvent: undefined,
+            value: value,
+          })
+        }
+
+        this.logger.debug('Reactive form project_id changed:', value);
+      }
+    });
   }
 
   ngAfterViewInit(): void {
     this.logger.debug('ngAfterViewInit', "HomeComponent.ngAfterViewInit() called");
-    //this.workspace.fetchAll();
-    this.projectsRepo.getAll("bsh11", {'path': '/'}).subscribe({
-      next: (projects) => {
-        this.projects = projects;
-        this.logger.debug('ngAfterViewInit', 'Project fetchAll Success', this.projects);
-        this.ready = true;
-        this.cdr.detectChanges();
-      },
-      error: (err) => {
-        this.logger.err('ngAfterViewInit', 'Project fetchAll Failure', err);
-      }
-    })
+
+    this.refreshData();
   }
 
   ngOnDestroy(): void {
@@ -100,8 +124,31 @@ export class HomeComponent implements OnInit, OnDestroy {
     this.auth.logout();
   }
 
-  onProjectChange(event: Event) {
-    this.logger.debug('onProjectChange','Project changed', event);
+  isRefreshing = false;
+  protected refreshData(): void {
+    this.ready = false;
+    this.isRefreshing = true;
+    this.projectsRepo.getAll("bsh11", {'path': '/'}).subscribe({
+      next: (projects) => {
+        this.projects = projects;
+        this.logger.debug('ngAfterViewInit', 'Project fetchAll Success', this.projects);
+        this.ready = true;
+        this.isRefreshing = false;
+        this.cdr.detectChanges();
+      },
+      error: (err) => {
+        if (err.status == 401) {
+          this.bcast.broadcast({type: AuthEvent.ApiAuthFail});
+          this.logger.err('ngAfterViewInit', 'Project fetchAll Failure', err);
+        }
+        this.ready = false;
+        this.isRefreshing = false;
+      }
+    })
+  }
+
+  onProjectChange(event: SelectChangeEvent) {
+    this.logger.debug('onProjectChange', 'Project changed', event);
     let project = this.projects.find(p => p.id == this.curr_project_uuid);
     if (project) {
       this.workspace.init(project.tenant_id, project);
@@ -110,4 +157,5 @@ export class HomeComponent implements OnInit, OnDestroy {
   }
 
   protected readonly AvailableTools = AvailableTools;
+  protected readonly filter = filter;
 }

@@ -3,17 +3,41 @@
     <img src="/assets/logo.png" alt="logo" style="height: 48px;">
     <p class="apptitle">sprint app</p>
     <div class="space"></div>
-    <select [(ngModel)]="curr_project_uuid" (change)="onProjectChange($event)">
-      <!--      <option [ngValue]="null" disabled>Select a project</option>-->
+    <div [formGroup]="projectForm" class="flex align-items-center gap-2">
+      <p-select
+        formControlName="project_id"
+        [options]="projects"
+        optionLabel="name"
+        optionValue="id"
+        [filter]="true"
+        placeholder="Select project"
+        [class]="'compact'"
+        [disabled]="!ready && isRefreshing"
+        [loading]="!ready">
+      </p-select>
+      <p-button
+        label=""
+        icon="pi pi-refresh"
+        iconPos="left"
+        (onClick)="refreshData()"
+        [rounded]="true"
+        [outlined]="true">
+      </p-button>
+      <!--[loading]="!ready"
+      [disabled]="projectForm.pristine"-->
+    </div>
+
+    <!--<select [(ngModel)]="curr_project_uuid" (change)="onProjectChange($event)">
+      &lt;!&ndash;      <option [ngValue]="null" disabled>Select a project</option>&ndash;&gt;
       <option value="test">Test</option>
       @for (item of projects; track item.id) {
         <option [ngValue]="item.id">
           {{ item.name }}
         </option>
       }
-    </select>
+    </select>-->
 
-<!--    <p>You selected: {{ curr_project_uuid }}</p>-->
+    <!--    <p>You selected: {{ curr_project_uuid }}</p>-->
   </header>
 
   <aside class="sidebar-left">
@@ -28,11 +52,29 @@
       <app-roadmapper></app-roadmapper>
     </div>
     <div [hidden]="activeTool !== AvailableTools.DUMMY">
-      DUMMY TOOL
+      <div class="flex align-items-center gap-2 mb-2">
+        <input pInputText class="p-inputtext-sm" placeholder="Cerca…" [(ngModel)]="defaultTool"/>
+        <button pButton class="p-button-sm p-button-text">Reset</button>
+        <button pButton class="p-button-sm">Applica</button>
+      </div>
+      <!--<div class="ag-theme-alpine" style="height: 60vh; width: 100%;">
+        <ag-grid-angular
+          [rowData]="rows"
+          [columnDefs]="cols"
+          [rowSelection]="'single'"
+          [animateRows]="true"
+          [suppressCellFocus]="true">
+        </ag-grid-angular>
+      </div>-->
+
     </div>
   </main>
 
-  <aside class="sidebar-right">OBJECT DETAIL BAR</aside>
+  <aside class="sidebar-right">OBJECT DETAIL BAR
+    <div [hidden]="activeTool !== AvailableTools.ROADMAPPER">
+      <app-pmo-detail></app-pmo-detail>
+    </div>
+  </aside>
 
   <footer class="bottombar">BOTTOM BAR</footer>
 </div>

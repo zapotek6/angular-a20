@@ -293,3 +293,22 @@ table {
     page-break-after: avoid;
   }
 }
+
+.p-inputtext, .p-button { border-radius: var(--radius); }
+
+/* Variante 'compact' globale */
+.p-inputtext.p-inputtext-sm,
+.p-button.p-button-sm { padding: var(--padY) var(--padX); }
+
+/* Tabelle PrimeNG compatte (se le usi) */
+.table-compact .p-datatable-thead > tr > th,
+.table-compact .p-datatable-tbody > tr > td { padding: 4px 8px; }
+
+/* AG Grid compatta */
+.ag-theme-alpine {
+  --ag-font-size: 13px;
+  --ag-list-item-height: 28px;
+  --ag-row-height: 30px;
+  --ag-header-height: 32px;
+  --ag-border-color: var(--border);
+}
