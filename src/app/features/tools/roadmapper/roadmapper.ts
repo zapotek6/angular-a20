@@ -128,6 +128,21 @@ export class Roadmapper implements OnInit, AfterViewInit {
   linkEls = new Map<string, SVGPathElement>();
   nodeGroups = new Map<string, SVGGElement>();
 
+  // Grid visibility controls
+  showPrimaryGrid: boolean = true;
+  showSecondaryGrid: boolean = false;
+
+  // Snapping controls
+  snapToPrimaryGrid: boolean = true;
+  snapToSecondaryGrid: boolean = false;
+
+  private readonly PRIMARY_GRID_SIZE = 100;
+  private readonly SECONDARY_GRID_SIZE = 10;
+
+  // Grid pattern refs (for panning sync)
+  private gridPattern10?: SVGPatternElement;
+  private gridPattern100?: SVGPatternElement;
+
   canvas?: HTMLCanvasElement;
   ctx?: CanvasRenderingContext2D;
 
@@ -204,7 +219,14 @@ export class Roadmapper implements OnInit, AfterViewInit {
     this.gRoot = this.rootRef.nativeElement;
     this.gLinks = this.linksRef.nativeElement;
     this.gNodes = this.nodessRef.nativeElement;
-    this.setupEventListeners();
+
+    // cache grid patterns and initialize transform to current pan
+    this.gridPattern10 = this.stage.querySelector('#grid10') as SVGPatternElement | null || undefined;
+    this.gridPattern100 = this.stage.querySelector('#grid100') as SVGPatternElement | null || undefined;
+    this.updateGridPatternTransform(this.panOffset.x, this.panOffset.y, this.zoom);
+
+    this.setupSVGPanningEventListeners();
+    this.setupSVGZoomEventListeners();
   }
 
   private refresh() {
@@ -601,6 +623,14 @@ export class Roadmapper implements OnInit, AfterViewInit {
       if (!this.drag || this.isPanning) return;
       group.releasePointerCapture(e.pointerId);
       group.classList.remove("dragging");
+      // Snap to grid if enabled
+      const grid = this.getActiveSnapGrid();
+      if (grid) {
+        this.drag.model.x = this.snapValue(this.drag.model.x, grid);
+        this.drag.model.y = this.snapValue(this.drag.model.y, grid);
+        this.drag.el.setAttribute("transform", `translate(${this.drag.model.x},${this.drag.model.y})`);
+        this.drawLinks();
+      }
       this.drag = null;
       // Persist here if needed
     });
@@ -608,9 +638,22 @@ export class Roadmapper implements OnInit, AfterViewInit {
 
 // ---- PANNING ----
   isPanning = false;
+  pan: Point = {x: 0, y: 0};
   panStart: Point = {x: 0, y: 0};
   panOffset: Point = {x: 0, y: 0}; // current translation of the whole diagram
-  private setupEventListeners() {
+
+  private updateRootTransform(x: number, y: number, zoom: number) {
+    const t = `translate(${x},${y}) scale(${zoom})`;
+    this.gRoot?.setAttribute('transform', t);
+  }
+
+  private updateGridPatternTransform(x: number, y: number, zoom: number) {
+    const t = `translate(${x},${y}) scale(${this.zoom})`;
+    this.gridPattern10?.setAttribute('patternTransform', t);
+    this.gridPattern100?.setAttribute('patternTransform', t);
+  }
+
+  private setupSVGPanningEventListeners() {
     this.stage?.addEventListener("pointerdown", (e: PointerEvent) => {
       if (this.drag) return;
       const target = e.target as Element | null;
@@ -630,10 +673,13 @@ export class Roadmapper implements OnInit, AfterViewInit {
       const dx = e.clientX - this.panStart.x;
       const dy = e.clientY - this.panStart.y;
 
-      const newX = this.panOffset.x + dx;
-      const newY = this.panOffset.y + dy;
+      this.pan.x = this.panOffset.x + dx;
+      this.pan.y = this.panOffset.y + dy;
 
-      this.gRoot?.setAttribute("transform", `translate(${newX},${newY})`);
+      //this.gRoot?.setAttribute("transform", `translate(${this.pan.x},${this.pan.y}) scale(${this.zoom})`);
+      this.updateRootTransform(this.pan.x, this.pan.y, this.zoom);
+      // Move grid patterns along with content
+      this.updateGridPatternTransform(this.pan.x, this.pan.y, this.zoom);
     });
 
     this.stage?.addEventListener("pointerup", (e: PointerEvent) => {
@@ -645,6 +691,9 @@ export class Roadmapper implements OnInit, AfterViewInit {
       this.panOffset.x += dx;
       this.panOffset.y += dy;
 
+      // finalize grid pattern transform to accumulated offset
+      this.updateGridPatternTransform(this.panOffset.x, this.panOffset.y, this.zoom);
+
       this.isPanning = false;
       this.stage?.releasePointerCapture(e.pointerId);
       (this.stage as SVGSVGElement).style.cursor = "default";
@@ -655,4 +704,58 @@ export class Roadmapper implements OnInit, AfterViewInit {
 // drawNodes();
 // drawLinks();
 
+  zoom = 1;
+  viewBox = { x: 0, y: 0, w: 2000, h: 2000 };
+  private setupSVGZoomEventListeners() {
+
+    this.stage?.addEventListener('wheel', (event) => {
+      event.preventDefault();
+      const zoomFactor = event.deltaY < 0 ? 0.9 : 1.1;
+
+      // Zoom around center
+      const mx = this.viewBox.x + this.viewBox.w / 2;
+      const my = this.viewBox.y + this.viewBox.h / 2;
+
+      this.viewBox.w *= zoomFactor;
+      this.viewBox.h *= zoomFactor;
+      this.viewBox.x = mx - this.viewBox.w / 2;
+      this.viewBox.y = my - this.viewBox.h / 2;
+
+      if (event.deltaY < 0) {
+        this.zoom -= 0.1;
+      } else {
+        this.zoom += 0.1
+      }
+
+      this.updateRootTransform(this.pan.x, this.pan.y, this.zoom);
+      this.updateGridPatternTransform(this.pan.x, this.pan.y, this.zoom);
+      // this.stage?.setAttribute('viewBox', `${this.viewBox.x} ${this.viewBox.y} ${this.viewBox.w} ${this.viewBox.h}`);
+    });
+  }
+
+  /*private applyZoom() {
+    const baseSize = 100;
+    const size = baseSize / this.zoom;
+    this.stage?.setAttribute("viewBox", `${100 - size/2} ${100 - size/2} ${size} ${size}`);
+  }
+
+  private zoomIn() {
+    this.zoom *= 1.2;
+    this.applyZoom();
+  }
+
+  private zoomOut() {
+    this.zoom /= 1.2;
+    this.applyZoom();
+  }*/
+
+  private getActiveSnapGrid(): number | null {
+    if (this.snapToPrimaryGrid) return this.PRIMARY_GRID_SIZE;
+    if (this.snapToSecondaryGrid) return this.SECONDARY_GRID_SIZE;
+    return null;
+  }
+
+  private snapValue(v: number, grid: number): number {
+    return Math.round(v / grid) * grid;
+  }
 }
