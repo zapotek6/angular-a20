@@ -1,0 +1,188 @@
+<p-tabs [value]="activeTab" [lazy]="false">
+  <p-tablist>
+    <p-tab value="0">Main</p-tab>
+    <p-tab value="1">Description</p-tab>
+    <p-tab value="2">More</p-tab>
+  </p-tablist>
+  <p-tabpanels>
+    <p-tabpanel value="1">
+      <div class="grid">
+        <div class="col-12 md:col-6">
+          <label>Project</label>
+          <input pInputText [readonly]="true" [ngModel]="form.get('project_id')?.value"/>
+        </div>
+        <div class="col-12">
+          <label>Kind</label>
+          <p-editor [formControl]="fc('description')" [style]="{ height: '400px' }"></p-editor>
+
+        </div>
+      </div>
+    </p-tabpanel>
+    <p-tabpanel value="0">
+      <div class="grid">
+        <div class="col-12 md:col-5">
+          <p-iftalabel>
+            <label>Project</label><br>
+            <input pInputText [readonly]="true" [ngModel]="form.get('project_id')?.value"/>
+          </p-iftalabel>
+        </div>
+        <div class="col-12 md:col-2">
+          <p-iftalabel>
+            <label>Kind</label><br>
+          <p-select [options]="kindOptions" optionLabel="label" optionValue="value"
+                    [disabled]="mode==='edit'"
+                    [formControl]="fc('kind')"></p-select>
+            </p-iftalabel>
+        </div>
+        <div class="col-12 md:col-5">
+          <p-iftalabel>
+            <label>Key</label><br>
+          <input pInputText [readonly]="true" [formControl]="fc('key')"/>
+            </p-iftalabel>
+        </div>
+
+        <div class="col-12 md:col-1">
+          <label for="active">Active</label><br>
+          <p-checkbox binary="true" [formControl]="fc('active')" inputId="active"></p-checkbox>
+        </div>
+        <div class="col-12 md:col-2">
+          <label>Category</label><br>
+          <p-select [options]="categoryOptions" optionLabel="label" optionValue="value"
+                    [formControl]="fc('category')"></p-select>
+        </div>
+        <div class="col-12 md:col-5">
+          <label>Component</label><br>
+          <input pInputText [formControl]="fc('component')"/>
+        </div>
+
+        <div class="col-12 md:col-5">
+          <label>Domain</label><br>
+          <input pInputText [formControl]="fc('domain')"/>
+          @if (form.controls['domain'].touched && form.controls['domain'].invalid) {
+            <small class="error">Domain is required</small>
+          }
+        </div>
+        <div class="col-12 md:col-5">
+          <label>Name</label><br>
+          <input pInputText [formControl]="fc('name')"/>
+        </div>
+
+        <!--<div class="col-12">
+          <label>Description</label><br>
+          <input pInputText [formControl]="fc('description')"/>
+        </div>-->
+
+        <div class="col-12 md:col-5">
+          <label>Owner email</label><br>
+          <!--          <input pInputText [formControl]="fc('owner_email')"/>-->
+          <p-select [options]="ws.getProjectMembers() || []" optionLabel="display_name" optionValue="email"
+                    [formControl]="fc('owner_email')"></p-select>
+        </div>
+      </div>
+
+      <div class="section">
+        <h4>Estimations</h4>
+        @if (estimationsFA.controls.length > 0) {
+          <div class="est-list">
+            <div class="est-row header">
+              <div>Resource</div>
+              <div>O</div>
+              <div>M</div>
+              <div>P</div>
+              <div></div>
+            </div>
+            @for (est of estimationsFA.controls; track $index; let i = $index) {
+              <div class="est-row">
+                <div><input pInputText [formControl]="fca(est, 'resource_email')"/></div>
+                <div>
+                  <p-inputNumber inputId="o" [formControl]="fca(est, 'effort_o')"></p-inputNumber>
+                </div>
+                <div>
+                  <p-inputNumber inputId="m" [formControl]="fca(est, 'effort_m')"></p-inputNumber>
+                </div>
+                <div>
+                  <p-inputNumber inputId="p" [formControl]="fca(est, 'effort_p')"></p-inputNumber>
+                </div>
+                <div>
+                  <button pButton (click)="removeEstimation(i)" rounded severity="danger">
+                    <i class="pi pi-trash" pButtonIcon></i>
+                  </button>
+                </div>
+              </div>
+            }
+          </div>
+        }
+        <div class="est-row add">
+          <div><input pInputText placeholder="email" [formControl]="fca(addEstForm, 'resource_email')"/></div>
+          <div>
+            <p-inputNumber class="sm" [formControl]="fca(addEstForm, 'effort_o')"></p-inputNumber>
+          </div>
+          <div>
+            <p-inputNumber class="sm" [formControl]="fca(addEstForm, 'effort_m')"></p-inputNumber>
+          </div>
+          <div>
+            <p-inputNumber class="sm" [formControl]="fca(addEstForm, 'effort_p')"></p-inputNumber>
+          </div>
+          <div>
+            <button pButton (click)="addEstimation()">
+              <i class="pi pi-check" pButtonIcon></i>
+              <span pButtonLabel>Add</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h4>Links</h4>
+        <div class="link-add">
+          <p-select [options]="allPmos" optionLabel="key" optionValue="id" placeholder="Select PMO to link"
+                    (onChange)="addLinkByPmo($event.value)"></p-select>
+        </div>
+        @if (linksFA.controls.length > 0) {
+          <div class="link-list">
+            @for (l of linksFA.controls; track $index; let i = $index) {
+              <div class="link-row">
+                <div>{{ getPmoKeyById(l.get('to_id')?.value) }}</div>
+                <div>
+                  <button pButton type="button" icon="pi pi-trash" (click)="removeLink(i)" rounded
+                          severity="danger"></button>
+                </div>
+              </div>
+            }
+          </div>
+        }
+        <small>Note: Links reference other PMOs. Internal fields are managed automatically.</small>
+      </div>
+
+    </p-tabpanel>
+    <p-tabpanel value="2">
+      <div class="grid">
+        <div class="col-12 md:col-6"><label>ID</label><input pInputText [readonly]="true"
+                                                             [ngModel]="form.get('id')?.value"/></div>
+        <div class="col-12 md:col-6"><label>Version</label><input pInputText [readonly]="true"
+                                                                  [ngModel]="form.get('version')?.value"/></div>
+        <div class="col-12 md:col-6"><label>Tenant</label><input pInputText [readonly]="true"
+                                                                 [ngModel]="form.get('tenant_id')?.value"/></div>
+        <div class="col-12 md:col-6"><label>Location</label><input pInputText [readonly]="true"
+                                                                   [ngModel]="form.get('location')?.value"/></div>
+        <div class="col-12 md:col-6"><label>Resource type</label><input pInputText [readonly]="true"
+                                                                        [ngModel]="form.get('resource_type')?.value"/>
+        </div>
+        <div class="col-12 md:col-6"><label>Created at</label><input pInputText [readonly]="true"
+                                                                     [ngModel]="form.get('created_at')?.value"/></div>
+        <div class="col-12 md:col-6"><label>Updated at</label><input pInputText [readonly]="true"
+                                                                     [ngModel]="form.get('updated_at')?.value"/></div>
+        <div class="col-12 md:col-6"><label>Created by</label><input pInputText [readonly]="true"
+                                                                     [ngModel]="form.get('created_by')?.value"/></div>
+        <div class="col-12 md:col-6"><label>Updated by</label><input pInputText [readonly]="true"
+                                                                     [ngModel]="form.get('updated_by')?.value"/></div>
+      </div>
+    </p-tabpanel>
+  </p-tabpanels>
+</p-tabs>
+
+<div class="footer">
+  <button pButton type="button" label="Cancel" (click)="cancel()" class="p-button-text"></button>
+  <button pButton type="button" [label]="mode==='create' ? 'Create' : 'Save'" (click)="save()"
+          [disabled]="form.invalid"></button>
+</div>

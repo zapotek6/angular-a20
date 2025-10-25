@@ -27,7 +27,7 @@ import {Pmo} from '../../../core/models/pmo';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class Lister implements OnInit, OnChanges, AfterContentInit {
-  pmos?: Pmo[];
+  pmos: Pmo[] = [];
   logger: Logger;
   bcast: BroadcasterService;
 
@@ -54,8 +54,8 @@ export class Lister implements OnInit, OnChanges, AfterContentInit {
     this.logger.debug('ngOnInit');
     this.bcast.onMessage((message) => {
       //this.logger.debug("onMessage", message);
-      if (message?.type === WorkspaceState.Ready) {
-        this.logger.debug('WorkspaceService Ready');
+      if (message?.type === WorkspaceState.ProjectSelected) {
+        this.logger.debug('WorkspaceService ProjectSelected');
         this.refreshData();
       }
       if (message?.type === WorkspaceState.NotReady) {
@@ -64,22 +64,24 @@ export class Lister implements OnInit, OnChanges, AfterContentInit {
       }
       if (message?.type === AvailableTools.LISTER) {
         this.logger.debug('Ativate LISTER');
-        this.refreshData();
+        // this.refreshData();
       }
     });
   }
 
   cleanUp() {
     this.logger.debug('cleanUp');
-    this.pmos = undefined;
+    this.pmos = [];
     this.cdr.detectChanges();
   }
   refreshData() {
     this.workspace.getPmos().subscribe({
       next: (pmos) => {
         this.pmos = [...pmos];
-        this.cdr.detectChanges();
         this.logger.debug('refreshData', 'Pmo read Success', this.pmos);
+      },
+      complete: () => {
+        this.cdr.detectChanges();
       },
       error: (err) => {
         this.logger.err('refreshData', 'Pmo read Failure', err);

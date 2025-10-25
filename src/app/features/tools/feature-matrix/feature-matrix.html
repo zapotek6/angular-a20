@@ -1,0 +1,69 @@
+<p-table #dt
+         [value]="featureMatrixData.rows"
+         [globalFilterFields]="['key', 'feature']"
+         [rowHover]="true"
+         [rows]="5"
+         [showCurrentPageReport]="true"
+         [rowsPerPageOptions]="[5, 25, 50]"
+         [loading]="loading"
+         [paginator]="true"
+         currentPageReportTemplate="Showing {first} to {last} of {totalRecords} entries"
+         [filterDelay]="0"
+         showGridlines
+         stripedRows
+         sortField="key"
+         [sortOrder]="1"
+         [tableStyle]="{'min-width': '50rem'}">
+  <!-- <ng-template #caption>
+     <div class="text-end pb-4">
+       <p-button icon="pi pi-external-link" label="Export" (click)="dt.exportCSV()" />
+     </div>
+   </ng-template>-->
+  <ng-template #caption>
+    <div class="flex">
+      <p-iconfield iconPosition="left" class="ml-auto">
+        <p-inputicon>
+          <i class="pi pi-search"></i>
+        </p-inputicon>
+        <input pInputText type="text" (input)="dt.filterGlobal($any($event.target).value, 'contains')"
+               placeholder="Search keyword"/>
+      </p-iconfield>
+    </div>
+  </ng-template>
+  <ng-template #header>
+    <tr>
+      <th style="min-width:15rem">
+        <div class="flex align-items-center justify-content-between">
+          Key
+          <p-columnFilter type="text" field="key" display="menu" />
+        </div>
+      </th>
+      <th style="min-width:15rem">
+        <div class="flex align-items-center justify-content-between">
+          Feature
+          <p-columnFilter type="text" field="name" display="menu" />
+        </div>
+      </th>
+      @for (col of featureMatrixData.cols; track col) {
+        <th style="width: 2rem; text-align: center;"></th>
+        <th style="width: 5rem; text-align: center;">
+          <div class="flex align-items-center justify-content-between">
+            {{col}}
+            <p-columnFilter type="text" field="{{col}}" display="menu" />
+          </div>
+      }
+    </tr>
+  </ng-template>
+  <ng-template #body let-product>
+    <tr>
+      <td pFrozenColumn style="width: 4rem; text-align: center;">{{ product.key }}</td>
+      <td pFrozenColumn style="width: 10rem; text-align: left;">{{ product.name }}</td>
+      @for (prio of product.prios; track prio.key) {
+        <td style="width: 2rem; text-align: center;"></td>
+        <td style="width: 5rem; text-align: center;">
+          <p-tag [value]="prio.moscow.toUpperCase()" [severity]="getSeverity(prio.moscow)"/>
+        </td>
+      }
+    </tr>
+  </ng-template>
+</p-table>

@@ -6,15 +6,14 @@ import { MetricsService } from '../../../utils/metrics.service';
 import { OnlineFocusService } from '../../../utils/online-focus.service';
 import {AuthService} from '../../auth/auth.service';
 import {GenericRepository} from './generic.repository';
-import {Pagination} from './pagination';
-import {Pmo} from '../../models/pmo';
-import {PmoDto} from './pmo.repository';
-import {Project} from '../../models/project';
+import {Member, Project, ResourcePath} from '../../models/project';
 
 export type ProjectDto = {
   project_id: string;
   name: string;
   description: string;
+  resource_paths: ResourcePath[];
+  members: Member[];
   id: string;
   version: number;
   tenant_id: string;

@@ -19,6 +19,7 @@ import { provideAnimationsAsync } from '@angular/platform-browser/animations/asy
 import { providePrimeNG } from 'primeng/config';
 import Aura from '@primeuix/themes/aura';
 import {NgControl} from '@angular/forms';
+import {DialogService} from 'primeng/dynamicdialog';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -42,6 +43,7 @@ export const appConfig: ApplicationConfig = {
         preset: Aura,            // puoi provare anche Lara, Material, Nora
         options: { darkModeSelector: '.theme-dark' } // opzionale
       }
-    })
+    }),
+    DialogService
   ]
 };

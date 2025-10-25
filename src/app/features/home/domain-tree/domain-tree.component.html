@@ -1,0 +1,17 @@
+<div class="domain-tree">
+  <p-tree
+    [value]="nodes"
+    [loading]="loading"
+    [filter]="true"
+    filterMode="lenient"
+    selectionMode="single"
+    [(selection)]="selectedNode"
+    (onNodeSelect)="nodeSelect($event)"
+    (onNodeExpand)="expandNode($event.node)"
+    (onNodeCollapse)="collapseNode($event.node)">
+  <!--(onNodeExpand)="nodeExpand($event)"
+    (onNodeCollapse)="nodeCollapse($event)"-->
+
+<!--    (onNodeUnselect)="nodeUnselect($event)">-->
+  </p-tree>
+</div>

@@ -12,10 +12,11 @@ import {Lister} from '../tools/lister/lister';
 import {BroadcasterService} from '../../core/brodacaster.service';
 import {AvailableTools, LeftSidebar} from '../left-sidebar/left-sidebar';
 import {Roadmapper} from '../tools/roadmapper/roadmapper';
-import {Button, ButtonDirective} from 'primeng/button';
-import {InputText} from 'primeng/inputtext';
+import {Button} from 'primeng/button';
 import {Select, SelectChangeEvent} from 'primeng/select';
 import {PmoDetail} from '../tools/roadmapper/pmo-detail/pmo-detail';
+import {DomainTreeComponent} from './domain-tree/domain-tree.component';
+import {FeatureMatrix} from '../tools/feature-matrix/feature-matrix';
 
 @Component({
   standalone: true,
@@ -27,11 +28,11 @@ import {PmoDetail} from '../tools/roadmapper/pmo-detail/pmo-detail';
     Lister,
     LeftSidebar,
     Roadmapper,
-    ButtonDirective,
-    InputText,
     Select,
     Button,
-    PmoDetail
+    PmoDetail,
+    DomainTreeComponent,
+    FeatureMatrix
   ],
   templateUrl: './home.component.html',
   styleUrl: './home.component.scss',
@@ -111,7 +112,7 @@ export class HomeComponent implements OnInit, OnDestroy {
   }
 
   ngAfterViewInit(): void {
-    this.logger.debug('ngAfterViewInit', "HomeComponent.ngAfterViewInit() called");
+    this.logger.debug('ngAfterViewInit');
 
     this.refreshData();
   }
@@ -128,7 +129,8 @@ export class HomeComponent implements OnInit, OnDestroy {
   protected refreshData(): void {
     this.ready = false;
     this.isRefreshing = true;
-    this.projectsRepo.getAll("bsh11", {'path': '/'}).subscribe({
+    this.workspace.init("bsh11");
+    this.projectsRepo.getAll(this.workspace.tenant_id ?? "", {'path': '/'}).subscribe({
       next: (projects) => {
         this.projects = projects;
         this.logger.debug('ngAfterViewInit', 'Project fetchAll Success', this.projects);
@@ -151,7 +153,8 @@ export class HomeComponent implements OnInit, OnDestroy {
     this.logger.debug('onProjectChange', 'Project changed', event);
     let project = this.projects.find(p => p.id == this.curr_project_uuid);
     if (project) {
-      this.workspace.init(project.tenant_id, project);
+      this.workspace.init(project.tenant_id);
+      this.workspace.selectProject(project);
       this.activeTool = this.defaultTool;
     } else this.workspace.deInit();
   }

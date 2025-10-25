@@ -12,18 +12,19 @@ export class ExtTicketInfo {
 }
 
 export class Reference {
+  tenant_id: string = "";
   project_id: string = "";
-  key: string = "";
+  id: string = "";
   name?: string | null;
 }
 
 export type LinkKind = "Dependency" | "Relation";
 
 export class Link {
-  name?: string | null;
   kind: LinkKind = "Dependency";
   from: Reference = new Reference();
   to: Reference = new Reference();
+  name?: string | null;
   condition?: string | null;
 }
 
@@ -33,6 +34,22 @@ export class ResourceEstimation {
   effort_m: number = 0;
   effort_p: number = 0;
 }
+
+export type Kind =
+  | "ML"
+  | "SS"
+  | "TS"
+  | "RK"
+  | "AS"
+  | "ID";
+
+export type Category =
+  | "ATD"
+  | "ANA"
+  | "QUA"
+  | "QAA"
+  | "ORG"
+  | "DEV";
 
 export type EarsKind =
   | "Optional"
@@ -78,10 +95,10 @@ export class ATI {
 // Class model (handy for UI logic; mirrors DTO with defaults)
 export class Pmo {
   project_id: string = "";
-  kind: string = "";
+  kind: Kind = "TS";
   key: string = "";
   active: boolean = true;
-  category: string = "";
+  category: Category = "DEV";
   component: string = "";
   domain: string = "";
   name: string = "";

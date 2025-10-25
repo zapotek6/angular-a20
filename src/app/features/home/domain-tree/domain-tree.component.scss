@@ -1,0 +1,11 @@
+:host {
+  display: block;
+}
+
+.domain-tree {
+  padding: .5rem;
+}
+
+:host ::ng-deep .p-tree {
+  width: 100%;
+}

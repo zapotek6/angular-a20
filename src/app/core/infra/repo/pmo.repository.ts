@@ -6,7 +6,7 @@ import {CacheStore} from './cache-store';
 import {Router} from '@angular/router';
 import {MetricsService} from '../../../utils/metrics.service';
 import {AuthService} from '../../auth/auth.service';
-import {Pmo} from '../../models/pmo';
+import {Kind, Pmo} from '../../models/pmo';
 import {Item} from '../../models/item';
 import {ItemDto} from './items.repository';
 
@@ -141,7 +141,7 @@ export const PmoConverter = {
     return p;
   },
   toDto: (m: Pmo): PmoDto =>
-    m
+    (m as unknown as PmoDto)
 };
 
 export const PMO_RESOURCE_NAME = 'pmos';
@@ -155,5 +155,18 @@ export class PmosRepository extends GenericRepository<PmoDto, Pmo> {
               metrics: MetricsService,
               auth: AuthService) {
     super(PMO_RESOURCE_NAME, PmoConverter, online, http, cache, router, metrics, auth);
+  }
+
+  create(tenant_id: string, payload: Partial<Pmo>): import('rxjs').Observable<Pmo> {
+    const toInvalidate = [`list:${PMO_RESOURCE_NAME}`];
+    const url = this.buildSprintappApiv1BaseUrl(tenant_id, PMO_RESOURCE_NAME);
+    return this.optimisticCreate<Pmo>(toInvalidate, url, payload);
+  }
+
+  update(tenant_id: string, pmo: Pmo): import('rxjs').Observable<Pmo> {
+    const itemKey = `list:${PMO_RESOURCE_NAME}:${pmo.id}`;
+    const url = `${this.buildSprintappApiv1BaseUrl(tenant_id, PMO_RESOURCE_NAME)}/${pmo.id}`;
+    const toInvalidate = [`list:${PMO_RESOURCE_NAME}`];
+    return this.optimisticUpdate<Pmo>(itemKey, url, pmo, pmo.version.toString(), toInvalidate);
   }
 }

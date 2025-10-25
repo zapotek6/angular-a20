@@ -44,3 +44,10 @@
 .p-select.compact .p-select-trigger {
   border-radius: 0.375rem; /* 6px */
 }
+
+/* global styles.scss or :host ::ng-deep for local */
+.p-contextmenu .p-menuitem > .p-menuitem-content {
+  padding: .25rem .5rem;     /* tighter rows */
+}
+.p-contextmenu .p-menuitem .p-menuitem-icon { font-size: .9rem; }
+.p-contextmenu .p-submenu-header { padding: .25rem .5rem; }

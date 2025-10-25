@@ -1,4 +1,3 @@
-<p>{{ pmo?.id || "undefined" }}</p>
 <div>
   <p-tag
     [value]="pmo?.key || ''"
@@ -18,7 +17,14 @@
 </div>
 <div>
   <p-iftalabel>
-    <input pInputText id="owner" [readonly]="true" [ngModel]="pmo?.owner_email" autocomplete="off"/>
     <label for="owner">Owner</label>
+<!--    <input pInputText id="owner" [readonly]="true" [ngModel]="pmo?.owner_email" autocomplete="off"/>-->
+    <p-select [options]="workspace.getProjectMembers() || []" optionLabel="display_name" optionValue="email"
+              [readonly]="true"
+              [ngModel]="pmo?.owner_email || ''"></p-select>
   </p-iftalabel>
+</div>
+<div class="actions" style="margin-top: 1rem; display: flex; gap: .5rem;">
+  <button pButton type="button" label="Edit" (click)="openEditDialog()" [disabled]="!pmo?.id"></button>
+  <button pButton type="button" label="New PMO" (click)="openCreateDialog()"></button>
 </div>

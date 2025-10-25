@@ -1,0 +1,8 @@
+<!-- 1) The context menu -->
+<p-contextMenu #cm [model]="items"></p-contextMenu>
+
+<!-- 2) The target area -->
+<div class="target"
+     (contextmenu)="onRightClick($event, cm)">
+  Right-click here
+</div>

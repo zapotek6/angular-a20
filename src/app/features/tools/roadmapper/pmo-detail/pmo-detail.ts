@@ -12,6 +12,9 @@ import {Tag} from 'primeng/tag';
 import {FormsModule} from '@angular/forms';
 import {InputTextModule} from 'primeng/inputtext';
 import {IftaLabel} from 'primeng/iftalabel';
+import {PmoEditorService} from '../../../../shared/pmo-editor/pmo-editor.service';
+import {ButtonModule} from 'primeng/button';
+import {Select} from 'primeng/select';
 
 @Component({
   selector: 'app-pmo-detail',
@@ -19,23 +22,27 @@ import {IftaLabel} from 'primeng/iftalabel';
     Tag,
     InputTextModule,
     FormsModule,
-    IftaLabel
+    IftaLabel,
+    ButtonModule,
+    Select
   ],
   templateUrl: './pmo-detail.html',
   styleUrl: './pmo-detail.css'
 })
 export class PmoDetail implements OnInit, AfterViewInit, OnDestroy {
+  pmoId?: string;
+  pmo?: Pmo;
+
   private sub?: Subscription;
   logger: Logger;
   private bcast: BroadcasterService;
 
-  pmoId?: string;
-  pmo?: Pmo;
   constructor(private readonly loggerService: LoggerService,
-              private readonly workspace: WorkspaceService,
+              protected readonly workspace: WorkspaceService,
               private readonly auth: AuthService,
               private readonly router: Router,
-              private readonly cdr: ChangeDetectorRef) {
+              private readonly cdr: ChangeDetectorRef,
+              private readonly pmoEditor: PmoEditorService) {
     this.logger = this.loggerService.createLocalLoggerInstance("PmoDetailComponent", LogSeverity.DEBUG);
     this.logger.enabled = true;
     this.logger.debug('constructor');
@@ -46,8 +53,8 @@ export class PmoDetail implements OnInit, AfterViewInit, OnDestroy {
     this.logger.debug('ngOnInit');
 
     this.bcast.onMessage((message) => {
-      if (message?.type === WorkspaceState.Ready) {
-        this.logger.debug('WorkspaceService Ready');
+      if (message?.type === WorkspaceState.ProjectSelected) {
+        this.logger.debug('WorkspaceService ProjectSelected');
       }
       if (message?.type === RoadMapperEvents.PMO_SELECTED) {
         if (message?.id) {
@@ -87,6 +94,27 @@ export class PmoDetail implements OnInit, AfterViewInit, OnDestroy {
 
   logout() {
     this.auth.logout();
+  }
+
+  openEditDialog() {
+    if (!this.pmo?.id) return;
+    const ref = this.pmoEditor.edit(this.pmo.id);
+    if (!ref) return;
+    ref.onClose.subscribe((res) => {
+      if (res?.id) {
+        this.refreshData(res.id);
+      }
+    });
+  }
+
+  openCreateDialog() {
+    const ref = this.pmoEditor.create();
+    if (!ref) return;
+    ref.onClose.subscribe((res) => {
+      if (res?.id) {
+        this.refreshData(res.id);
+      }
+    });
   }
 
   ready = false;

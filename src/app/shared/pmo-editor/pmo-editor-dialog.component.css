@@ -1,0 +1,51 @@
+/*.col-12 { grid-column: span 12; }
+.md\:col-2 { grid-column: span 12; }
+.md\:col-4 { grid-column: span 12; }
+.md\:col-6 { grid-column: span 12; }
+@media (min-width: 768px) {
+  .md\:col-2 { grid-column: span 2; }
+  .md\:col-4 { grid-column: span 4; }
+  .md\:col-6 { grid-column: span 6; }
+}*/
+.section {
+  margin-top: 1rem;
+}
+
+.est-row {
+  display: grid;
+  grid-template-columns: 30rem 40px 40px 40px 60px;
+  gap: 1rem;
+  align-items: center;
+  margin-bottom: 0.25rem;
+}
+
+.est-row.header {
+  font-weight: 600;
+}
+
+.p-inputnumber.sm,
+.p-inputtext.sm {
+  width: 4rem !important;
+  text-align: right;
+}
+
+.link-row {
+  display: grid;
+  grid-template-columns: 1fr 60px;
+  align-items: center;
+  margin-bottom: 0.25rem;
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.error {
+  color: var(--red-500);
+  font-size: 0.8rem;
+}
+
+/*# sourceMappingURL=pmo-editor-dialog.component.css.map */

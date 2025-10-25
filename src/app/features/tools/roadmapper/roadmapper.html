@@ -1,16 +1,8 @@
-<!--<svg>
-  <rect style="fill: yellow;" height="100" width="80"></rect>
-</svg>-->
-<p class="pmo">ROADMAPPER TOOLBAR</p>
-<style>
-  .pmol {
-    fill: #dcdcdc;
-    background: #fff;
-    rx: 2%;
-    ry: 2%;
-    filter: url(#softShadow);
-  }
-</style>
+<div style="">
+<p-menubar [model]="menuItems"></p-menubar>
+
+<p-contextMenu #ctxMenu [model]="ctxMenuRowItems"></p-contextMenu>
+
 <svg id="stage" #stage height="100%" width="100%" viewBox="0 0 2000 2000" style="border:1px solid #cdcdcd">
   <!-- defs: arrow marker + soft shadow -->
   <defs>
@@ -58,3 +50,4 @@
     <g id="nodes"></g>
   </g>
 </svg>-->
+</div>

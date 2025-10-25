@@ -1,10 +1,16 @@
-import {AfterViewInit, Component, ElementRef, OnInit, Renderer2, ViewChild} from '@angular/core';
+import {AfterViewInit, Component, ElementRef, inject, Inject, OnInit, Renderer2, ViewChild} from '@angular/core';
 import {Pmo} from '../../../core/models/pmo';
 import {WorkspaceService, WorkspaceState} from '../../../core/workspace/workspace.service';
 import {BroadcasterService} from '../../../core/brodacaster.service';
 import {LoggerService} from '../../../core/logger/logger.service';
 import {Logger, LogSeverity} from '../../../core/logger/logger';
 import {Links} from '../../../core/infra/repo/pagination';
+import {ContextMenu} from 'primeng/contextmenu';
+import {MenuItem} from 'primeng/api';
+import {Menubar} from 'primeng/menubar';
+import {PmoEditorService} from '../../../shared/pmo-editor/pmo-editor.service';
+import {forkJoin, Subscription} from 'rxjs';
+import {Layout} from '../../../core/models/layout';
 
 type Point = { x: number; y: number };
 
@@ -106,7 +112,10 @@ export enum RoadMapperEvents { PMO_SELECTED = 'ROADMAPPER-PMO_SELECTED'}
 
 @Component({
   selector: 'app-roadmapper',
-  imports: [],
+  imports: [
+    ContextMenu,
+    Menubar
+  ],
   templateUrl: './roadmapper.html',
   styleUrl: './roadmapper.scss'
 })
@@ -116,11 +125,13 @@ export class Roadmapper implements OnInit, AfterViewInit {
   @ViewChild('root', {static: false}) rootRef!: ElementRef<SVGSVGElement>;
   @ViewChild('links', {static: false}) linksRef!: ElementRef<SVGSVGElement>;
   @ViewChild('nodes', {static: false}) nodessRef!: ElementRef<SVGSVGElement>;
+  @ViewChild('ctxMenu', {static: false}) ctxMenuRef!: ContextMenu;
   stage?: SVGSVGElement;
   gRoot?: SVGElement;
   gLinks?: SVGElement;
   gNodes?: SVGElement;
   pmos?: Pmo[];
+  layouts?: Layout[];
 
   nodes = new Map<string, NodeModel>();
   links: LinkModel[] = [];
@@ -147,9 +158,50 @@ export class Roadmapper implements OnInit, AfterViewInit {
   canvas?: HTMLCanvasElement;
   ctx?: CanvasRenderingContext2D;
 
+  ctxMenuRowItems: MenuItem[] = [
+    { label: 'Refresh',  icon: 'pi pi-refresh',  command: () => this.refresh() },
+    { label: 'Edit',     icon: 'pi pi-pencil',   command: () => {} },
+    { separator: true },
+    { label: 'Delete',   icon: 'pi pi-trash',    command: () => {}, disabled: false },
+    {
+      label: 'More', icon: 'pi pi-ellipsis-h',
+      items: [
+        { label: 'Details', icon: 'pi pi-info-circle', command: () => {} }
+      ]
+    }
+  ];
+
+  menuItems: MenuItem[] = [
+    {
+      label: 'File',
+      items: [
+        { label: 'New', icon: 'pi pi-fw pi-plus', command: () => {} },
+        { label: 'Open', icon: 'pi pi-fw pi-folder-open', command: () => {} },
+        { label: 'Save', icon: 'pi pi-fw pi-save', command: () => {} },
+        { separator: true },
+        { label: 'Exit', icon: 'pi pi-fw pi-times' }
+      ]
+    },
+    {
+      label: 'Edit',
+      items: [
+        { label: 'Undo', icon: 'pi pi-fw pi-undo' },
+        { label: 'Redo', icon: 'pi pi-fw pi-redo' }
+      ]
+    },
+    {
+      label: 'Help',
+      items: [
+        { label: 'About', icon: 'pi pi-fw pi-info' }
+      ]
+    }
+  ];
+
+  pmoEditorService = inject(PmoEditorService);
+  private sub?: Subscription;
+
   logger: Logger;
   private bcast: BroadcasterService;
-
   constructor(private readonly loggerService: LoggerService,
               private readonly workspaceService: WorkspaceService,
               private el: ElementRef<HTMLElement>,
@@ -173,8 +225,8 @@ export class Roadmapper implements OnInit, AfterViewInit {
     this.logger.debug('ngOnInit');
 
     this.bcast.onMessage((message) => {
-      if (message?.type === WorkspaceState.Ready) {
-        this.logger.debug('WorkspaceService Ready');
+      if (message?.type === WorkspaceState.ProjectSelected) {
+        this.logger.debug('WorkspaceService ProjectSelected');
         this.refresh();
       }
     });
@@ -196,11 +248,15 @@ export class Roadmapper implements OnInit, AfterViewInit {
   }
 
   private refresh() {
-    this.workspaceService.getPmos().subscribe({
-      next: (pmos) => {
+    this.sub = forkJoin({
+      pmos: this.workspaceService.getPmos(),
+      layouts: this.workspaceService.getLayouts(),
+    }).subscribe({
+      next: ({pmos, layouts}) => {
         this.pmos = pmos;
         this.pmosByProjectKey = new Map<string, Pmo>(pmos.map(p => [`${p.project_id}::${p.key}`, p]));
-      },
+        this.layouts = layouts;
+        },
       complete: () => {
 
         let [nodesArray, linksArray] = this.buildNodesAndLinks(this.pmos || []);
@@ -254,12 +310,10 @@ export class Roadmapper implements OnInit, AfterViewInit {
 
     pmos.map(pmo => {
       let links = pmo.links.map(dep => {
-        let a = `${dep.to.project_id}::${dep.to.key}`;
-        let b = this.pmosByProjectKey.get(a);
         let link: LinkModel = {
           from: pmo.id,
           id: crypto.randomUUID(),
-          to: this.pmosByProjectKey.get(`${dep.to.project_id}::${dep.to.key}`)?.id || "undefined",
+          to: dep.to.id,
         }
         return link;
       });
@@ -559,14 +613,19 @@ export class Roadmapper implements OnInit, AfterViewInit {
       }*/
 
       this.makeDraggable(g, n);
-      this.makeClickable(g, n.id);
+      this.makeClickable(g, n);
+      this.setupCtxMenuForNode(g, n);
     });
   }
 
 
-  private makeClickable(group: SVGGElement, id: string) {
+  private makeClickable(group: SVGGElement, node: NodeModel) {
     group.addEventListener('click', e => {
-      this.bcast.broadcast({ type: RoadMapperEvents.PMO_SELECTED, id: id });
+      this.bcast.broadcast({ type: RoadMapperEvents.PMO_SELECTED, id: node.id });
+    });
+    group.addEventListener('dblclick', e => {
+      this.pmoEditorService.edit(node.id)
+      //this.bcast.broadcast({ type: RoadMapperEvents.PMO_SELECTED, id: id });
     });
   }
 
@@ -677,6 +736,22 @@ export class Roadmapper implements OnInit, AfterViewInit {
       this.stage?.releasePointerCapture(e.pointerId);
       (this.stage as SVGSVGElement).style.cursor = "default";
     });
+  }
+
+  openForNode(ev: MouseEvent, cm: ContextMenu, node: NodeModel) {
+    ev.preventDefault();
+    cm.show(ev);
+  }
+
+  private setupCtxMenuForNode(group: SVGGElement, model: NodeModel) {
+      group?.addEventListener("contextmenu", (e: PointerEvent) => {
+        if (this.isPanning) return;
+        const target = e.target as Element | null;
+        // Start panning only if the click is NOT on a node
+        if (target && target.closest(".node")) return;
+
+        this.openForNode(e, this.ctxMenuRef, model);
+      });
   }
 
   zoom = 1;

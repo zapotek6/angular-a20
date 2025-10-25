@@ -10,6 +10,10 @@ svg {
   filter: url(#softShadow);
 }
 
+.pmo .ml {
+  fill: var(--color-pmo-ml);
+}
+
 .pmo .ss {
   fill: var(--color-pmo-ss);
 }

@@ -6,10 +6,11 @@ import {AuthService} from './core/auth/auth.service';
 import {LanguageSwitcherComponent} from './i18n/language-switcher.component';
 import {LoginComponent} from './features/login/login.component';
 import {environment} from '../environments/environment';
+import {DynamicDialogModule} from 'primeng/dynamicdialog';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet],
+  imports: [RouterOutlet, DynamicDialogModule],
   templateUrl: './app.html',
   styleUrl: './app.scss'
 })

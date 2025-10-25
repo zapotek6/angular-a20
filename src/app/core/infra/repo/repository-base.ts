@@ -80,13 +80,12 @@ export class RepositoryBase<DTO, MODEL> {
     }*/
 
     const entry = this.cache.peek<MODEL>(key);
-    const ifNoneMatch = entry?.etag;
 
     const httpParams = new HttpParams({ fromObject: params ?? {} });
-    const headers = ifNoneMatch ? new HttpHeaders({ 'If-None-Match': ifNoneMatch}) : undefined;
-    headers?.append(this.auth.get_xsrf_header_name(), this.auth.get_xsrf_token());
+    let headers = new HttpHeaders();
+    headers = headers.append(this.auth.get_xsrf_header_name(), this.auth.get_xsrf_token());
     const req$ = this.http
-      .get<PaginationResponse<DTO>>(url, { observe: 'response', params: httpParams, headers, withCredentials: true })
+      .get<PaginationResponse<DTO>>(url, { observe: 'response', params: httpParams, headers: headers, withCredentials: true })
       .pipe(
         map((resp: HttpResponse<PaginationResponse<DTO>>) => {
           const etag = resp.headers.get('ETag') || resp.headers.get('Etag') || resp.headers.get('etag') || undefined;
@@ -117,32 +116,34 @@ export class RepositoryBase<DTO, MODEL> {
     return req$;
   }
 
-  protected get<T>(key: string, url: string, ttlMs = 60_000): Observable<T> {
+  protected get(key: string, url: string, ttlMs = 60_000): Observable<MODEL> {
     console.log('get', key, url, this.cache);
-    const fresh = this.cache.get<T>(key);
-    if (fresh) return of(fresh.data as T);
+    const fresh = this.cache.get<MODEL>(key);
+    if (fresh) return of(fresh.data as MODEL);
 
     const dedupKey = `GET|${key}`;
     const inFlight = this.inflight.get(dedupKey);
-    if (inFlight) return inFlight as Observable<T>;
+    if (inFlight) return inFlight as Observable<MODEL>;
 
-    const entry = this.cache.peek<T>(key);
+    const entry = this.cache.peek<MODEL>(key);
     const ifNoneMatch = entry?.etag;
 
     const headers = ifNoneMatch ? new HttpHeaders({ 'If-None-Match': ifNoneMatch }) : undefined;
     headers?.append(this.auth.get_xsrf_header_name(), this.auth.get_xsrf_token());
     const req$ = this.http
-      .get<T>(url, { observe: 'response', headers ,withCredentials: true })
+      .get<DTO>(url, { observe: 'response', headers ,withCredentials: true })
       .pipe(
-        map((resp: HttpResponse<T>) => {
+        map((resp: HttpResponse<DTO>) => {
           const etag = resp.headers.get('ETag') || resp.headers.get('Etag') || resp.headers.get('etag') || undefined;
-          let body = resp.body as T | null;
-          if (!body) body = this.cache.peek<T>(key)?.data ?? null;
+          let body = resp.body as DTO | null;
+          // if (!body) body = this.cache.peek<T>(key)?.data ?? null;
           if (body != null) {
-            this.cache.set<T>(key, body, etag ?? entry?.etag, ttlMs);
+            let model = this.converter.fromDto(body);
+            this.cache.set<MODEL>(key, model, etag ?? entry?.etag, ttlMs);
             this.cache.setUrlMeta(resp.url ?? url, { etag: etag ?? entry?.etag, body });
+            return model;
           }
-          return body as T;
+          throw new Error('body is null');
         }),
         finalize(() => this.inflight.delete(dedupKey)),
         takeUntil(this.nav$),
@@ -184,7 +185,8 @@ export class RepositoryBase<DTO, MODEL> {
   protected optimisticUpdate<T>(
     itemKey: string,
     url: string,
-    patch: Partial<T>,
+    patch: T,
+    etag: string,
     listKeysToInvalidate: string[]
   ): Observable<T> {
     const snapshot = this.cache.peek<T>(itemKey);
@@ -193,10 +195,11 @@ export class RepositoryBase<DTO, MODEL> {
       const next = { ...(snapshot.data as any), ...(patch as any) } as T;
       this.cache.setStale<T>(itemKey, next, snapshot.etag);
     }
-    const ifMatch = snapshot?.etag;
-    const headers = ifMatch ? new HttpHeaders({ 'If-Match': ifMatch }) : undefined;
-    headers?.append(this.auth.get_xsrf_header_name(), this.auth.get_xsrf_token());
-    const req$ = this.http.patch<T>(url, patch, { observe: 'response', headers, withCredentials: true }).pipe(
+    const ifMatch =  etag;
+    let headers = new HttpHeaders();
+    headers = headers.append('If-Match', ifMatch);
+    headers = headers.append(this.auth.get_xsrf_header_name(), this.auth.get_xsrf_token());
+    const req$ = this.http.put<T>(url, patch, { observe: 'response', headers: headers, withCredentials: true }).pipe(
       map((resp) => {
         const etag = resp.headers.get('ETag') || resp.headers.get('Etag') || resp.headers.get('etag') || undefined;
         const body = (resp.body ?? snapshot?.data) as T;

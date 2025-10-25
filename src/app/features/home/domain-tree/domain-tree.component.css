@@ -1,0 +1,13 @@
+:host {
+  display: block;
+}
+
+.domain-tree {
+  padding: 0.5rem;
+}
+
+:host ::ng-deep .p-tree {
+  width: 100%;
+}
+
+/*# sourceMappingURL=domain-tree.component.css.map */

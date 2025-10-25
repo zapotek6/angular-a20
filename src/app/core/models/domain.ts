@@ -1,20 +1,23 @@
 import {ResourceType} from './types';
 
-export type Member = {
-  email: string;
-  display_name: string;
-}
-export type ResourcePath = {
-  resource_type: ResourceType,
-  path: string,
-}
+export enum EntityKind {
+  Tenant = "tenant",
+  Group = "group",
+  Company = "company",
+  Unit = "unit",
+  Department = "department",
+  Container = "container",
+  Project = "project",
+  Team = "team",}
 
-export class Project {
-  project_id: string = "";
+
+export class Domain {
+  kind: EntityKind = EntityKind.Tenant;
   name: string = "";
   description: string = "";
-  resource_paths: ResourcePath[] = [];
-  members: Member[] = [];
+  parent_id: string = "'";
+  detail_id: string = "";
+
   id: string = "";
   version: number = 0;
   tenant_id: string = "";

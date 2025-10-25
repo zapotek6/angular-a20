@@ -9,7 +9,7 @@
     <div class="detail">{{ pmo?.category }}</div>
     <div style="max-height: 3rem;">Dependencies
       @for (link of pmo?.links || []; track pmo?.id) {
-        <div class="detail">{{ link?.to?.project_id + '::' + link?.to?.key }}</div>
+        <div class="detail">{{ link?.to?.project_id + '::' + link?.to?.id }}</div>
       }
     </div>
   </div>

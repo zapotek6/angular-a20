@@ -66,11 +66,11 @@ export class GenericRepository<DTO, MODEL> extends RepositoryBase<DTO, MODEL> {
     );
   }*/
 
-  /*read(tenant_id: string, id: string): Observable<DTO> {
-    return super.get<DTO>(this.itemKey(id), `${this.buildSprintappApiv1BaseUrl(tenant_id, this.apiResourceName)}/${id}`);
+  read(tenant_id: string, id: string): Observable<MODEL> {
+    return super.get(this.itemKey(id), `${this.buildSprintappApiv1BaseUrl(tenant_id, this.apiResourceName)}/${id}`);
   }
 
-  watch(tenant_id: string, id: string): Observable<DTO> {
+  /*watch(tenant_id: string, id: string): Observable<DTO> {
     const key = this.itemKey(id);
     return merge(
       this.read(tenant_id, id),
