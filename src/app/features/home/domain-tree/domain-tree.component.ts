@@ -168,7 +168,7 @@ export class DomainTreeComponent implements OnInit, OnDestroy {
       }
     }
 
-    /*// Attach people as leaf nodes under their location
+    // Attach people as leaf nodes under their location
     for (const p of projects) {
       const loc = norm(p.location);
       const projectNode: TreeNode = {
@@ -187,7 +187,7 @@ export class DomainTreeComponent implements OnInit, OnDestroy {
         // Orphan people: show at root so they are not lost
         roots.push(projectNode);
       }
-    }*/
+    }
 
     // Sort children alphabetically by label
     const sortRec = (ns: TreeNode[]) => {
