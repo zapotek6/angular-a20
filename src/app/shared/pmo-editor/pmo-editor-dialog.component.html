@@ -135,7 +135,11 @@
       <div class="section">
         <h4>Links</h4>
         <div class="link-add">
-          <p-select [options]="allPmos" optionLabel="key" optionValue="id" placeholder="Select PMO to link"
+          <p-select [options]="allPmos"
+                    appendTo="body"
+                    optionLabel="key"
+                    optionValue="id"
+                    placeholder="Select PMO to link"
                     (onChange)="addLinkByPmo($event.value)"></p-select>
         </div>
         @if (linksFA.controls.length > 0) {
