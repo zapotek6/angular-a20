@@ -128,6 +128,10 @@ export class WorkspaceService {
     throw new Error('Workspace Service Guard protection');
   }
 
+  public getProjectLocation(): string {
+    return this._project?.location || '';
+  }
+
   private guardProjectOperationOk(): boolean {
     if (this.status == WorkspaceState.ProjectSelected) {
       return true

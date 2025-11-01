@@ -10,7 +10,7 @@ import {MenuItem} from 'primeng/api';
 import {Menubar} from 'primeng/menubar';
 import {PmoEditorService} from '../../../shared/pmo-editor/pmo-editor.service';
 import {forkJoin, Subscription} from 'rxjs';
-import {Layout} from '../../../core/models/layout';
+import {Layout, Node as LayoutNode, Position as LayoutPosition} from '../../../core/models/layout';
 
 type Point = { x: number; y: number };
 
@@ -132,6 +132,8 @@ export class Roadmapper implements OnInit, AfterViewInit {
   gNodes?: SVGElement;
   pmos?: Pmo[];
   layouts?: Layout[];
+  // Currently applied layout (optional)
+  currentLayout?: Layout;
 
   nodes = new Map<string, NodeModel>();
   links: LinkModel[] = [];
@@ -139,14 +141,20 @@ export class Roadmapper implements OnInit, AfterViewInit {
   pmosByProjectKey = new Map<string, Pmo>();
   linkEls = new Map<string, SVGPathElement>();
   nodeGroups = new Map<string, SVGGElement>();
+  // Expanded SS state and nested ownership mapping
+  expandedSS: Set<string> = new Set<string>();
+  // Maps nodeId -> owning SSId when the node is drawn nested inside an expanded SS
+  nestedNodeOwner: Map<string, string> = new Map<string, string>();
+  // Per-SS inner layout positions (local coords within the SS group)
+  innerPositionsBySS: Map<string, Map<string, Point>> = new Map();
 
   // Grid visibility controls
   showPrimaryGrid: boolean = true;
-  showSecondaryGrid: boolean = false;
+  showSecondaryGrid: boolean = true;
 
   // Snapping controls
-  snapToPrimaryGrid: boolean = true;
-  snapToSecondaryGrid: boolean = false;
+  snapToPrimaryGrid: boolean = false;
+  snapToSecondaryGrid: boolean = true;
 
   private readonly PRIMARY_GRID_SIZE = 100;
   private readonly SECONDARY_GRID_SIZE = 10;
@@ -183,9 +191,9 @@ export class Roadmapper implements OnInit, AfterViewInit {
       ]
     },
     {
-      label: 'Edit',
+      label: 'Layout',
       items: [
-        { label: 'Undo', icon: 'pi pi-fw pi-undo' },
+        { label: 'Save', icon: 'pi pi-fw pi-save' },
         { label: 'Redo', icon: 'pi pi-fw pi-redo' }
       ]
     },
@@ -228,6 +236,22 @@ export class Roadmapper implements OnInit, AfterViewInit {
       if (message?.type === WorkspaceState.ProjectSelected) {
         this.logger.debug('WorkspaceService ProjectSelected');
         this.refresh();
+        /*this.workspaceService.getLayouts().subscribe({
+          next: (layouts) => {
+            this.layouts = this.layouts?.concat(layouts);
+          },
+          error: (error) => {
+            this.logger.err('Error fetching layouts:', error);
+          },
+          complete: () => {
+            if (this.layouts && this.layouts.length > 0) {
+              // this.applyLayout(this.layouts[0]);
+              this.currentLayout = this.layouts[0];
+            }
+            this.refresh();
+            this.logger.info('Layouts fetched successfully');
+          }
+        })*/
       }
     });
   }
@@ -245,6 +269,155 @@ export class Roadmapper implements OnInit, AfterViewInit {
 
     this.setupSVGPanningEventListeners();
     this.setupSVGZoomEventListeners();
+
+    this.menuItems.filter(m => m.label === 'Layout').forEach(m => {
+      m.items?.filter(i => i.label === 'Save').forEach(i => {
+        i.command = () => { this.saveLayout(); }
+      })
+    });
+
+
+  }
+
+  // Expose an API to apply a layout and redraw
+  public setLayout(layout: Layout) {
+    this.currentLayout = layout;
+    // If nodes/links already exist apply immediately, else it will be applied on next refresh
+    if (this.nodes && this.nodes.size > 0) {
+      this.applyLayout(layout);
+      this.cleanUpNodesAndLinks();
+      this.drawNodes();
+      this.drawLinks();
+    }
+  }
+
+  public saveLayout() {
+    if (this.currentLayout) {
+      let layout = this.getCurrentLayout();
+      this.workspaceService.layoutsRepo.update(this.workspaceService.tenant_id ?? "", layout).subscribe({
+        next: (layout) => {
+          this.currentLayout = layout;
+        },
+        complete: () => {
+          this.logger.info('Layout saved successfully');
+        },
+        error: (error) => {
+          this.logger.err('Error saving layout:', error);
+        }
+      });
+    } else {
+      let layout = this.getCurrentLayout();
+      this.workspaceService.layoutsRepo.create(this.workspaceService.tenant_id ?? "", layout).subscribe({
+        complete: () => {
+          this.logger.info('Layout saved successfully');
+        },
+        error: (error) => {
+          this.logger.err('Error saving layout:', error);
+        }
+      });
+    }
+  }
+  // Return current absolute positions as a Layout
+  public getCurrentLayout(name?: string, description?: string): Layout {
+    const layout = new Layout();
+    layout.name = name ?? (this.currentLayout?.name ?? '');
+    layout.description = description ?? (this.currentLayout?.description ?? '');
+    layout.nodes = [];
+    layout.embedded_layouts = [];
+    layout.location = this.currentLayout?.location ?? this.workspaceService.getProjectLocation();
+
+    // Ensure nested ownership is up-to-date
+    this.rebuildNestedOwnership();
+
+    // Build nodes entries with absolute positions
+    this.nodes.forEach((n) => {
+      const ln = new LayoutNode();
+      ln.id = n.id;
+
+      // Compute absolute position. If nested under an expanded SS, use SS position + local inner position.
+      let absX = n.x;
+      let absY = n.y;
+      const owner = this.nestedNodeOwner.get(n.id);
+      if (owner && owner !== n.id) {
+        const local = this.innerPositionsBySS.get(owner)?.get(n.id);
+        const ssNode = this.nodeById.get(owner);
+        if (local && ssNode) {
+          absX = ssNode.x + local.x;
+          absY = ssNode.y + local.y;
+        }
+      }
+
+      ln.pos = new LayoutPosition();
+      ln.pos.x = absX;
+      ln.pos.y = absY;
+      // Persist collapsed state for SS nodes (expandedSS contains expanded ones)
+      ln.collapsed = (n.nodeClass === 'ss') ? !this.expandedSS.has(n.id) : false;
+      ln.hidden = false;
+
+      layout.nodes.push(ln);
+    });
+
+    // pass-through some meta when available
+    if (this.currentLayout) {
+      layout.id = this.currentLayout.id;
+      layout.version = this.currentLayout.version;
+      layout.tenant_id = this.currentLayout.tenant_id;
+      layout.location = this.currentLayout.location;
+      layout.resource_type = this.currentLayout.resource_type;
+      layout.created_at = this.currentLayout.created_at;
+      layout.updated_at = this.currentLayout.updated_at;
+      layout.created_by = this.currentLayout.created_by;
+      layout.updated_by = this.currentLayout.updated_by;
+    }
+
+    return layout;
+  }
+
+  private applyLayout(layout: Layout) {
+    const byId = new Map<string, LayoutNode>();
+    (layout.nodes || []).forEach(n => byId.set(n.id, n));
+
+    // Apply positions to all known nodes
+    this.nodes.forEach((n, id) => {
+      const ln = byId.get(id);
+      if (ln && ln.pos) {
+        n.x = ln.pos.x;
+        n.y = ln.pos.y;
+      }
+    });
+
+    // Rebuild SS expanded/collapsed state based on layout's collapsed flag
+    this.expandedSS.clear();
+    this.nodes.forEach((n, id) => {
+      if (n.nodeClass === 'ss') {
+        const ln = byId.get(id);
+        if (ln && typeof ln.collapsed === 'boolean') {
+          if (!ln.collapsed) this.expandedSS.add(id);
+        }
+      }
+    });
+
+    // Initialize inner local positions from absolute positions for each expanded SS
+    this.innerPositionsBySS.clear();
+    this.expandedSS.forEach(ssId => {
+      const ssNode = this.nodeById.get(ssId);
+      if (!ssNode) return;
+      const deps = Array.from(this.collectDependencies(ssId));
+      const posMap = new Map<string, Point>();
+      deps.forEach(depId => {
+        const depLayout = byId.get(depId);
+        if (!depLayout || !depLayout.pos) return;
+        // Convert absolute pos to local within SS
+        posMap.set(depId, {
+          x: depLayout.pos.x - ssNode.x,
+          y: depLayout.pos.y - ssNode.y,
+        });
+      });
+      this.innerPositionsBySS.set(ssId, posMap);
+    });
+
+    this.currentLayout = layout;
+    // Note: container sizes are recomputed in drawExpandedSS based on inner positions
   }
 
   private refresh() {
@@ -255,15 +428,23 @@ export class Roadmapper implements OnInit, AfterViewInit {
       next: ({pmos, layouts}) => {
         this.pmos = pmos;
         this.pmosByProjectKey = new Map<string, Pmo>(pmos.map(p => [`${p.project_id}::${p.key}`, p]));
-        this.layouts = layouts;
+        this.layouts = this.layouts?.concat(layouts) || layouts;
         },
       complete: () => {
+        if (this.layouts && this.layouts.length > 0) {
+          this.currentLayout = this.layouts[0];
+        }
 
         let [nodesArray, linksArray] = this.buildNodesAndLinks(this.pmos || []);
 
         this.nodes = new Map<string, NodeModel>(nodesArray.map(n => [n.id, n]));
         this.nodeById = this.nodes;
         this.links = linksArray;
+
+        // If a layout has been selected/applied, use it to position nodes and set SS states
+        if (this.currentLayout) {
+          this.applyLayout(this.currentLayout);
+        }
 
         this.cleanUpNodesAndLinks();
         this.drawNodes();
@@ -358,7 +539,17 @@ export class Roadmapper implements OnInit, AfterViewInit {
   }
 
   private drawLinks(): void {
+    // Redraw top-level links only for nodes that are not nested inside an expanded SS
+    // Clear existing links elements each time to avoid stale paths
+    this.gLinks?.replaceChildren();
+    this.linkEls.clear();
+
     this.links.forEach(l => {
+      // Skip links where either endpoint is nested inside an expanded SS
+      const ownerFrom = this.nestedNodeOwner.get(l.from);
+      const ownerTo = this.nestedNodeOwner.get(l.to);
+      if ((ownerFrom && ownerFrom !== l.from) || (ownerTo && ownerTo !== l.to)) return;
+
       const s = this.nodeById.get(l.from);
       const t = this.nodeById.get(l.to);
       if (!s || !t) return;
@@ -410,7 +601,6 @@ export class Roadmapper implements OnInit, AfterViewInit {
       descent,
     };
   }
-
 
   private parseCssValueToPx = (cssValue: string, ctx: StyleContext): number => {
     let value = parseFloat(cssValue);
@@ -559,62 +749,332 @@ export class Roadmapper implements OnInit, AfterViewInit {
     return parseFloat(getComputedStyle(child).fontSize);
   }
 
-
   private cleanUpNodesAndLinks() {
     this.gNodes?.replaceChildren();
     this.gLinks?.replaceChildren();
   }
-  private drawNodes(): void {
-    this.nodes.forEach(n => {
-      const g = this.createEl("g", {class: "pmo", transform: `translate(${n.x},${n.y})`}, this.gNodes);
-      this.nodeGroups.set(n.id, g);
 
-      const padding = 12;
-      // Pmo
-      let pmo = this.createEl("rect", {class: `pmo ${n.nodeClass}`, width: n.w, height: n.h}, g);
+  private rebuildNestedOwnership(): void {
+    this.nestedNodeOwner.clear();
+    // For each currently expanded SS, collect its dependencies and register ownership
+    Array.from(this.nodes.values())
+      .filter(node => node.nodeClass === 'ss')
+      .forEach(node => {
+        this.expandedSS.add(node.id);
+      const deps = this.collectDependencies(node.id);
+      deps.forEach(depId => {
+        if (depId !== node.id && !this.nestedNodeOwner.has(depId)) {
+          this.nestedNodeOwner.set(depId, node.id);
+        }
+      });
+    });
+  }
 
-      let ctx: StyleContext = {
-        emFontSize: this.getEmInPxFromParent(g),
-        remFontSize: this.getRemInPx(),
+  private collectDependencies(rootId: string): Set<string> {
+    const visited = new Set<string>();
+    const queue: string[] = [rootId];
+    while (queue.length) {
+      const cur = queue.shift()!;
+      // follow links where cur is the source
+      this.links.forEach(l => {
+        if (l.from === cur) {
+          const to = l.to;
+          if (!visited.has(to) && to !== rootId) {
+            visited.add(to);
+            queue.push(to);
+          }
+        }
+      });
+    }
+    return visited;
+  }
+
+  private drawDefaultNode(n: NodeModel): void {
+    const g = this.createEl("g", {class: "pmo", transform: `translate(${n.x},${n.y})`}, this.gNodes);
+    this.nodeGroups.set(n.id, g);
+
+    // Base rectangle
+    this.createEl("rect", {class: `pmo ${n.nodeClass}`, width: n.w, height: n.h}, g);
+
+    const ctx: StyleContext = {
+      emFontSize: this.getEmInPxFromParent(g),
+      remFontSize: this.getRemInPx(),
+    };
+
+    // Header: key + pill row
+    let o = {x: 0, y: 0};
+    let sz = {w: 60 - o.x, h: this.parseCssValueToPx('1.5rem', ctx)};
+    this.buildComponent(n.key, 'key', 'key', o, sz, ctx, g);
+
+    o = {x: 60, y: 0};
+    sz = {w: n.w - o.x, h: this.parseCssValueToPx('1.5rem', ctx)};
+    this.buildComponent('Default', 'pill delayed', 'pill delayed', o, sz, ctx, g);
+
+    // Title row
+    o = {x: 0, y: sz.h};
+    sz = {w: n.w - o.x, h: this.parseCssValueToPx('3rem', ctx)};
+    this.buildComponent(n.title, 'title', 'title', o, sz, ctx, g);
+
+    this.makeDraggable(g, n);
+    this.makeClickable(g, n);
+    this.setupCtxMenuForNode(g, n);
+  }
+
+  private drawExpandedSS(n: NodeModel): void {
+    const g = this.createEl("g", {class: "pmo ss expanded", transform: `translate(${n.x},${n.y})`}, this.gNodes);
+    this.nodeGroups.set(n.id, g);
+
+    // Compute text/layout context
+    const ctx: StyleContext = {
+      emFontSize: this.getEmInPxFromParent(g),
+      remFontSize: this.getRemInPx(),
+    };
+
+    // Header heights
+    const headerRowH = this.parseCssValueToPx('1.5rem', ctx);
+    const titleRowH = this.parseCssValueToPx('3rem', ctx);
+    const headerH = headerRowH + titleRowH;
+
+    // Gather dependencies (direct + indirect)
+    const deps = Array.from(this.collectDependencies(n.id)).filter(id => this.nodeById.has(id));
+
+    // Inner node card size + padding
+    const childW = 180;
+    const childH = 100;
+    const gap = 20;
+
+    // Prepare header + base rect first; size will use current n.w/n.h
+    const rect = this.createEl("rect", {class: `pmo ${n.nodeClass}`, width: n.w, height: n.h}, g);
+
+    // Header content (top-left corner)
+    let o = {x: 0, y: 0};
+    let sz = {w: 60 - o.x, h: headerRowH};
+    this.buildComponent(n.key, 'key', 'key', o, sz, ctx, g);
+
+    o = {x: 60, y: 0};
+    sz = {w: n.w - o.x - headerRowH, h: headerRowH};
+    this.buildComponent('SS', 'pill delayed', 'pill delayed', o, sz, ctx, g);
+
+    // Toggle button at top-right corner
+    const btnSize = headerRowH * 0.8;
+    const btnX = n.w - btnSize - 6;
+    const btnY = (headerRowH - btnSize) / 2;
+    const toggle = this.createEl('rect', {x: btnX, y: btnY, width: btnSize, height: btnSize, rx: 4, ry: 4, class: 'toggle'}, g);
+    const symbol = this.createEl('text', {class: 'toggle-symbol'}, g);
+    symbol.setAttribute('x', String(btnX + btnSize / 2));
+    symbol.setAttribute('y', String(btnY + btnSize / 2 + 4));
+    symbol.setAttribute('text-anchor', 'middle');
+    symbol.textContent = '−';
+    toggle.style.cursor = 'pointer';
+    symbol.style.cursor = 'pointer';
+    const toggleHandler = (e: Event) => {
+      e.stopPropagation();
+      if (this.expandedSS.has(n.id)) {
+        this.expandedSS.delete(n.id);
+      } else {
+        this.expandedSS.add(n.id);
       }
+      this.cleanUpNodesAndLinks();
+      this.drawNodes();
+      this.drawLinks();
+    };
+    toggle.addEventListener('click', toggleHandler);
+    symbol.addEventListener('click', toggleHandler);
 
-      let o = {x: 0, y: 0};
-      let sz = {w: 60 - o.x, h: this.parseCssValueToPx('1.5rem', ctx)};
-      this.buildComponent(n.key, 'key', 'key', o, sz, ctx, g);
+    // Title row beneath
+    o = {x: 0, y: headerRowH};
+    sz = {w: n.w - o.x, h: titleRowH};
+    this.buildComponent(n.title, 'title', 'title', o, sz, ctx, g);
 
-      o = {x: 60, y: 0};
-      sz = {w: n.w - o.x, h: this.parseCssValueToPx('1.5rem', ctx)};
-      this.buildComponent('Default', 'pill delayed', 'pill delayed', o, sz, ctx, g);
+    // Draw inner nodes group
+    const innerGroup = this.createEl('g', {class: 'ss-inner'}, g);
 
+    // Default grid positions as a fallback for nodes without stored layout
+    const cols = Math.max(1, Math.min(4, Math.ceil(Math.sqrt(deps.length))));
+    const startX = gap;
+    const startY = headerH + gap;
 
-      o = {x: 0, y: sz.h};
-      sz = {w: n.w - o.x, h: this.parseCssValueToPx('3rem', ctx)};
-      this.buildComponent(n.title, 'title', 'title', o, sz, ctx, g);
+    // Retrieve or initialize per-SS positions
+    let posMap = this.innerPositionsBySS.get(n.id);
+    if (!posMap) {
+      posMap = new Map<string, Point>();
+      this.innerPositionsBySS.set(n.id, posMap);
+    }
 
-      /*o = { x: 60, y: 0 };
-      sz = { w: n.w - o.x, h: n.h };
-      this.build('Default', 'pill delayed-text', 'pill delayed', o, sz, this.getRemInPx(), this.getEmInPxFromSelf(g), g);*/
+    // Initialize missing entries using grid
+    deps.forEach((id, index) => {
+      if (!posMap!.has(id)) {
+        const col = index % cols;
+        const row = Math.floor(index / cols);
+        const x = startX + col * (childW + gap);
+        const y = startY + row * (childH + gap);
+        posMap!.set(id, {x, y});
+      }
+    });
 
-      // Text blocks
-      // const padding = 12;
+    // Local reference for quick access during rendering/drag
+    const localPos = posMap;
 
-      /*const id = this.createEl("text", {class: "id", x: padding, y: 18}, g);
-      id.textContent = n.code;
+    // Compute bounds from positions to resize container
+    const bounds = (() => {
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      deps.forEach(id => {
+        const p = localPos.get(id);
+        if (!p) return;
+        minX = Math.min(minX, p.x);
+        minY = Math.min(minY, p.y);
+        maxX = Math.max(maxX, p.x + childW);
+        maxY = Math.max(maxY, p.y + childH);
+      });
+      if (!isFinite(minX)) { minX = startX; minY = startY; maxX = minX; maxY = minY; }
+      const innerW = (maxX - minX) + gap;
+      const innerH = (maxY - minY) + gap;
+      return { minX, minY, maxX, maxY, innerW, innerH };
+    })();
 
-      const title = this.createEl("text", {class: "title", x: padding, y: 38}, g);
-      title.textContent = n.title;
+    // Resize SS container to fit inner nodes (keep at least current size)
+    const contentW = Math.max(n.w, bounds.innerW + gap); // extra padding
+    const contentH = Math.max(n.h, headerH + bounds.innerH + gap);
+    n.w = contentW;
+    n.h = contentH;
+    rect.setAttribute('width', String(n.w));
+    rect.setAttribute('height', String(n.h));
+    // update toggle x since width may have changed
+    const newBtnX = n.w - btnSize - 6;
+    toggle.setAttribute('x', String(newBtnX));
+    symbol.setAttribute('x', String(newBtnX + btnSize / 2));
 
-      const meta = this.createEl("text", {class: "meta", x: padding, y: n.h - 14}, g);
-      meta.textContent = n.meta;
+    // Create inner link layer
+    const innerLinksGroup = this.createEl('g', {class: 'ss-inner-links'}, innerGroup);
 
-      if (n.ticket) {
-        const ticket = this.createEl("text", {class: "ticket", x: padding, y: n.h - 32}, g);
-        ticket.textContent = n.ticket;
-      }*/
+    // Helper to (re)draw inner links
+    const redrawInnerLinks = () => {
+      innerLinksGroup.replaceChildren();
+      const ilinks = this.links.filter(l => deps.includes(l.from) && deps.includes(l.to));
+      ilinks.forEach(l => {
+        const p0 = localPos.get(l.from);
+        const p1 = localPos.get(l.to);
+        if (!p0 || !p1) return;
+        const src: NodeModel = {x: p0.x, y: p0.y, w: childW, h: childH} as any;
+        const dst: NodeModel = {x: p1.x, y: p1.y, w: childW, h: childH} as any;
+        const path = this.createEl('path', {class: 'link', 'marker-end': 'url(#arrow)'}, innerLinksGroup);
+        path.setAttribute('d', this.linkPath(src, dst));
+      });
+    };
 
-      this.makeDraggable(g, n);
-      this.makeClickable(g, n);
-      this.setupCtxMenuForNode(g, n);
+    // Render children (and make them draggable)
+    deps.forEach((id) => {
+      const child = this.nodeById.get(id)!;
+      const p = localPos.get(id)!;
+      const cg = this.createEl('g', {transform: `translate(${p.x},${p.y})`}, innerGroup);
+      // child rectangle
+      this.createEl('rect', {class: `pmo ${child.nodeClass}`, width: childW, height: childH}, cg);
+      // child key and title minimal info
+      const cctx: StyleContext = { emFontSize: this.getEmInPxFromParent(cg), remFontSize: this.getRemInPx() } as any;
+      let co = {x: 4, y: 2};
+      let csz = {w: childW - 8, h: this.parseCssValueToPx('1.2rem', ctx)};
+      this.buildComponent(child.key, 'key', 'key', co, csz, cctx, cg);
+      co = {x: 4, y: csz.h};
+      csz = {w: childW - 8, h: this.parseCssValueToPx('2rem', ctx)};
+      this.buildComponent(child.title, 'title', 'title', co, csz, cctx, cg);
+
+      // Make inner draggable within the SS bounds
+      this.makeInnerDraggable(
+        cg as SVGGElement,
+        n,
+        id,
+        localPos,
+        {childW, childH, padding: gap, headerH},
+        { rect, toggle, symbol, btnSize },
+        () => {
+          // onMove
+          redrawInnerLinks();
+        },
+        () => {
+          // onEnd: finalize container size to the minimal area that contains all children
+          // with a uniform gap on every side (and room for the header/toggle)
+          let maxRight = 0;
+          let maxBottom = 0;
+          deps.forEach(did => {
+            const lp = localPos.get(did);
+            if (!lp) return;
+            maxRight = Math.max(maxRight, lp.x + childW);
+            maxBottom = Math.max(maxBottom, lp.y + childH);
+          });
+
+          // If there are no deps, keep a minimal inner area equal to padding box
+          const innerRequiredW = (deps.length === 0) ? (gap * 2) : (maxRight + gap);
+          const innerRequiredH = (deps.length === 0) ? (gap * 2) : (maxBottom + gap);
+
+          // Minimal width to keep header controls visible (leave space for toggle on the right)
+          const minHeaderW = btnSize + 6 + gap; // left gap + toggle + right margin
+
+          const newW = Math.max(minHeaderW, innerRequiredW);
+          const newH = Math.max(headerH + gap, headerH + innerRequiredH);
+
+          n.w = newW;
+          n.h = newH;
+          rect.setAttribute('width', String(newW));
+          rect.setAttribute('height', String(newH));
+          const bx = newW - btnSize - 6;
+          toggle.setAttribute('x', String(bx));
+          symbol.setAttribute('x', String(bx + btnSize / 2));
+
+          // Ensure inner links reflect final positions/sizes
+          redrawInnerLinks();
+        }
+      );
+    });
+
+    // Initial inner link draw
+    redrawInnerLinks();
+
+    this.makeDraggable(g, n);
+    this.makeClickable(g, n);
+    this.setupCtxMenuForNode(g, n);
+  }
+
+  private drawNodes(): void {
+    // Rebuild nested ownership mapping based on current expanded SS
+    this.rebuildNestedOwnership();
+
+    this.nodes.forEach(n => {
+      // If the node is owned (nested) by an expanded SS, skip drawing it at top level
+      const owner = this.nestedNodeOwner.get(n.id);
+      if (owner && owner !== n.id) return;
+
+      if (n.nodeClass === 'ss' && this.expandedSS.has(n.id)) {
+        this.drawExpandedSS(n);
+      } else {
+        // collapsed SS or non-SS: draw default
+        // For SS collapsed, add an expand toggle button
+        this.drawDefaultNode(n);
+        if (n.nodeClass === 'ss') {
+          const g = this.nodeGroups.get(n.id)!;
+          const ctx: StyleContext = { emFontSize: this.getEmInPxFromParent(g), remFontSize: this.getRemInPx() } as any;
+          const headerRowH = this.parseCssValueToPx('1.5rem', ctx);
+          const btnSize = headerRowH * 0.8;
+          const btnX = n.w - btnSize - 6;
+          const btnY = (headerRowH - btnSize) / 2;
+          const toggle = this.createEl('rect', {x: btnX, y: btnY, width: btnSize, height: btnSize, rx: 4, ry: 4, class: 'toggle'}, g);
+          const symbol = this.createEl('text', {class: 'toggle-symbol'}, g);
+          symbol.setAttribute('x', String(btnX + btnSize / 2));
+          symbol.setAttribute('y', String(btnY + btnSize / 2 + 4));
+          symbol.setAttribute('text-anchor', 'middle');
+          symbol.textContent = '+';
+          toggle.style.cursor = 'pointer';
+          symbol.style.cursor = 'pointer';
+          const toggleHandler = (e: Event) => {
+            e.stopPropagation();
+            this.expandedSS.add(n.id);
+            this.cleanUpNodesAndLinks();
+            this.drawNodes();
+            this.drawLinks();
+          };
+          toggle.addEventListener('click', toggleHandler);
+          symbol.addEventListener('click', toggleHandler);
+        }
+      }
     });
   }
 
@@ -631,6 +1091,9 @@ export class Roadmapper implements OnInit, AfterViewInit {
 
   /* ---- Drag logic (pointer events) ---- */
   drag: DragState | null = null;
+  // Inner drag state for nodes inside an expanded SS
+  private innerDrag: { ssId: string; nodeId: string; startX: number; startY: number; origX: number; origY: number; el: SVGGElement; } | null = null;
+
   private makeDraggable(group: SVGGElement, model: NodeModel): void {
     group.style.cursor = "grab";
 
@@ -672,6 +1135,99 @@ export class Roadmapper implements OnInit, AfterViewInit {
       this.drag = null;
       // Persist here if needed
     });
+  }
+
+  // Make a dependency node inside an expanded SS draggable within the SS
+  private makeInnerDraggable(cg: SVGGElement,
+                             ssNode: NodeModel,
+                             childId: string,
+                             posMap: Map<string, Point>,
+                             opts: { childW: number; childH: number; padding: number; headerH: number },
+                             ui: { rect: SVGRectElement; toggle: SVGRectElement; symbol: SVGTextElement; btnSize: number },
+                             onMove?: () => void,
+                             onEnd?: () => void): void {
+    cg.style.cursor = 'grab';
+
+    const getBounds = () => {
+      // Movement bounds: inside the SS rect minus padding and header
+      const minX = opts.padding;
+      const minY = opts.headerH + opts.padding;
+      const maxX = Math.max(minX, ssNode.w - opts.childW - opts.padding);
+      const maxY = Math.max(minY, ssNode.h - opts.childH - opts.padding);
+      return {minX, minY, maxX, maxY};
+    };
+
+    const onPointerDown = (e: PointerEvent) => {
+      e.stopPropagation();
+      const p = posMap.get(childId) || {x: opts.padding, y: opts.headerH + opts.padding};
+      this.innerDrag = {
+        ssId: ssNode.id,
+        nodeId: childId,
+        startX: e.clientX,
+        startY: e.clientY,
+        origX: p.x,
+        origY: p.y,
+        el: cg
+      };
+      cg.setPointerCapture(e.pointerId);
+      cg.classList.add('dragging');
+    };
+
+    const onPointerMove = (e: PointerEvent) => {
+      if (!this.innerDrag) return;
+      e.stopPropagation();
+      const dx = e.clientX - this.innerDrag.startX;
+      const dy = e.clientY - this.innerDrag.startY;
+      let nx = this.innerDrag.origX + dx;
+      let ny = this.innerDrag.origY + dy;
+      // optional snapping using active grid
+      const grid = this.getActiveSnapGrid();
+      if (grid) {
+        nx = this.snapValue(nx, grid);
+        ny = this.snapValue(ny, grid);
+      }
+      // Enforce minimum bounds (header + padding), allow overflow to trigger live growth
+      const b = getBounds();
+      nx = Math.max(b.minX, nx);
+      ny = Math.max(b.minY, ny);
+
+      // Live grow SS container if dragging beyond current bounds
+      const neededW = nx + opts.childW + opts.padding;
+      if (neededW > ssNode.w) {
+        ssNode.w = neededW;
+        ui.rect.setAttribute('width', String(ssNode.w));
+        const bx = ssNode.w - ui.btnSize - 6;
+        ui.toggle.setAttribute('x', String(bx));
+        ui.symbol.setAttribute('x', String(bx + ui.btnSize / 2));
+      }
+      const neededH = ny + opts.childH + opts.padding;
+      const minH = opts.headerH + opts.padding + opts.childH + opts.padding; // at least header + one child + padding
+      const targetH = Math.max(neededH, minH);
+      if (targetH > ssNode.h) {
+        ssNode.h = targetH;
+        ui.rect.setAttribute('height', String(ssNode.h));
+      }
+
+      // persist local pos
+      posMap.set(childId, {x: nx, y: ny});
+      // update transform
+      this.innerDrag.el.setAttribute('transform', `translate(${nx},${ny})`);
+      if (onMove) onMove();
+    };
+
+    const onPointerUp = (e: PointerEvent) => {
+      if (!this.innerDrag) return;
+      e.stopPropagation();
+      cg.releasePointerCapture(e.pointerId);
+      cg.classList.remove('dragging');
+      // ensure map saved (already updated on move)
+      if (onEnd) onEnd();
+      this.innerDrag = null;
+    };
+
+    cg.addEventListener('pointerdown', onPointerDown);
+    cg.addEventListener('pointermove', onPointerMove);
+    cg.addEventListener('pointerup', onPointerUp);
   }
 
 // ---- PANNING ----

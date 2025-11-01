@@ -140,4 +140,6 @@ export class PmoDetail implements OnInit, AfterViewInit, OnDestroy {
       }
     })
   }
+
+
 }
