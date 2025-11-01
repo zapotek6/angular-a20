@@ -145,6 +145,8 @@ export class Roadmapper implements OnInit, AfterViewInit {
   expandedSS: Set<string> = new Set<string>();
   // Maps nodeId -> owning SSId when the node is drawn nested inside an expanded SS
   nestedNodeOwner: Map<string, string> = new Map<string, string>();
+  // Nodes hidden due to being internals of collapsed SS
+  hiddenNodes: Set<string> = new Set<string>();
   // Per-SS inner layout positions (local coords within the SS group)
   innerPositionsBySS: Map<string, Map<string, Point>> = new Map();
 
@@ -158,6 +160,9 @@ export class Roadmapper implements OnInit, AfterViewInit {
 
   private readonly PRIMARY_GRID_SIZE = 100;
   private readonly SECONDARY_GRID_SIZE = 10;
+
+  // Default node size used for collapsed/regular PMOs
+  private readonly DEFAULT_NODE_SIZE: Size = { w: 200, h: 100 };
 
   // Grid pattern refs (for panning sync)
   private gridPattern10?: SVGPatternElement;
@@ -538,6 +543,93 @@ export class Roadmapper implements OnInit, AfterViewInit {
     return `M ${p0.x} ${p0.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${p1.x} ${p1.y}`;
   }
 
+  // --- Anchored link routing using 4 perimeter connection points (side midpoints) per rectangle ---
+  private anchorsForRect(r: { x: number; y: number; w: number; h: number }): Point[] {
+    const x0 = r.x, y0 = r.y;
+    const x1 = r.x + r.w, y1 = r.y + r.h;
+    const cx = (x0 + x1) / 2;
+    const cy = (y0 + y1) / 2;
+    // Order: TC, MR, BC, ML
+    return [
+      { x: cx, y: y0 },   // top-center
+      { x: x1, y: cy },   // mid-right
+      { x: cx, y: y1 },   // bottom-center
+      { x: x0, y: cy },   // mid-left
+    ];
+  }
+
+  private shortestAnchorPair(aRect: { x: number; y: number; w: number; h: number },
+                             bRect: { x: number; y: number; w: number; h: number }): { a: Point; b: Point } {
+    const A = this.anchorsForRect(aRect);
+    const B = this.anchorsForRect(bRect);
+    let bestA = A[0];
+    let bestB = B[0];
+    let bestD = Infinity;
+    for (const pa of A) {
+      for (const pb of B) {
+        const dx = pb.x - pa.x;
+        const dy = pb.y - pa.y;
+        const d2 = dx * dx + dy * dy; // squared distance sufficient for comparison
+        if (d2 < bestD) {
+          bestD = d2;
+          bestA = pa;
+          bestB = pb;
+        }
+      }
+    }
+    return { a: bestA, b: bestB };
+  }
+
+  private linkPathAnchored(src: { x: number; y: number; w: number; h: number },
+                           dst: { x: number; y: number; w: number; h: number }): string {
+    // Cubic Bezier between nearest perimeter anchors, with control points
+    // oriented away from each rectangle center to create a smooth exit/entry.
+    // Additionally, offset the anchors slightly OUTSIDE each rectangle so links
+    // appear to touch the perimeter even when links are rendered beneath nodes.
+    const { a, b } = this.shortestAnchorPair(src, dst);
+
+    // Compute outward normals for each anchor (based on which side it lies on)
+    const s = { x0: src.x, y0: src.y, x1: src.x + src.w, y1: src.y + src.h };
+    const t = { x0: dst.x, y0: dst.y, x1: dst.x + dst.w, y1: dst.y + dst.h };
+
+    const eps = 1e-6;
+    const normalForAnchor = (p: Point, r: { x0: number; y0: number; x1: number; y1: number }): Point => {
+      if (Math.abs(p.y - r.y0) < eps) return { x: 0, y: -1 }; // top
+      if (Math.abs(p.x - r.x1) < eps) return { x: 1, y: 0 };  // right
+      if (Math.abs(p.y - r.y1) < eps) return { x: 0, y: 1 };  // bottom
+      if (Math.abs(p.x - r.x0) < eps) return { x: -1, y: 0 }; // left
+      // Fallback: point toward rectangle center
+      const cx = (r.x0 + r.x1) / 2, cy = (r.y0 + r.y1) / 2;
+      const dx = p.x - cx, dy = p.y - cy;
+      const L = Math.hypot(dx, dy) || 1;
+      return { x: dx / L, y: dy / L };
+    };
+
+    const na = normalForAnchor(a, s);
+    const nb = normalForAnchor(b, t);
+
+    // Keep a constant visual gap in screen pixels regardless of zoom.
+    const screenGap = 6; // px on screen
+    const gap = screenGap / Math.max(this.zoom || 1, 0.0001);
+
+    const aOut = { x: a.x + na.x * gap, y: a.y + na.y * gap };
+    const bOut = { x: b.x + nb.x * gap, y: b.y + nb.y * gap };
+
+    // Use outward normals for handle directions to ensure curves
+    // exit the source outward and approach the destination from outside
+    // (end tangent points inward toward the anchor).
+    // Handle length proportional to distance between adjusted anchors, within bounds
+    const dist = Math.hypot(bOut.x - aOut.x, bOut.y - aOut.y);
+    const minHandle = 20;
+    const maxHandle = 200;
+    const handle = Math.max(minHandle, Math.min(maxHandle, dist * 0.35));
+
+    const c1 = { x: aOut.x + na.x * handle, y: aOut.y + na.y * handle };
+    const c2 = { x: bOut.x + nb.x * handle, y: bOut.y + nb.y * handle };
+
+    return `M ${aOut.x} ${aOut.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${bOut.x} ${bOut.y}`;
+  }
+
   private drawLinks(): void {
     // Redraw top-level links only for nodes that are not nested inside an expanded SS
     // Clear existing links elements each time to avoid stale paths
@@ -545,10 +637,11 @@ export class Roadmapper implements OnInit, AfterViewInit {
     this.linkEls.clear();
 
     this.links.forEach(l => {
-      // Skip links where either endpoint is nested inside an expanded SS
+      // Skip links where either endpoint is nested inside an expanded SS or hidden (collapsed SS internals)
       const ownerFrom = this.nestedNodeOwner.get(l.from);
       const ownerTo = this.nestedNodeOwner.get(l.to);
       if ((ownerFrom && ownerFrom !== l.from) || (ownerTo && ownerTo !== l.to)) return;
+      if (this.hiddenNodes.has(l.from) || this.hiddenNodes.has(l.to)) return;
 
       const s = this.nodeById.get(l.from);
       const t = this.nodeById.get(l.to);
@@ -558,7 +651,7 @@ export class Roadmapper implements OnInit, AfterViewInit {
         path = this.createEl("path", {class: "link", "marker-end": "url(#arrow)"}, this.gLinks);
         this.linkEls.set(l.id, path);
       }
-      path.setAttribute("d", this.linkPath(s, t));
+      path.setAttribute("d", this.linkPathAnchored(s, t));
     });
   }
 
@@ -755,17 +848,30 @@ export class Roadmapper implements OnInit, AfterViewInit {
   }
 
   private rebuildNestedOwnership(): void {
+    // Also computes hidden nodes (internals of collapsed SS)
     this.nestedNodeOwner.clear();
-    // For each currently expanded SS, collect its dependencies and register ownership
-    Array.from(this.nodes.values())
-      .filter(node => node.nodeClass === 'ss')
-      .forEach(node => {
-        this.expandedSS.add(node.id);
-      const deps = this.collectDependencies(node.id);
+    this.hiddenNodes.clear();
+
+    // 1) Expanded SS: collect deps and mark ownership so they render nested
+    this.expandedSS.forEach(ssId => {
+      const deps = this.collectDependencies(ssId);
       deps.forEach(depId => {
-        if (depId !== node.id && !this.nestedNodeOwner.has(depId)) {
-          this.nestedNodeOwner.set(depId, node.id);
+        if (depId !== ssId && !this.nestedNodeOwner.has(depId)) {
+          this.nestedNodeOwner.set(depId, ssId);
         }
+      });
+    });
+
+    // 2) Collapsed SS: hide their internals, unless already nested under an expanded SS
+    this.nodes.forEach((n, ssId) => {
+      if (n.nodeClass !== 'ss') return;
+      if (this.expandedSS.has(ssId)) return; // only collapsed SS here
+      const deps = this.collectDependencies(ssId);
+      deps.forEach(depId => {
+        if (depId === ssId) return; // skip self
+        if (this.expandedSS.has(depId)) return; // don't hide other expanded SS roots
+        if (this.nestedNodeOwner.has(depId)) return; // expanded nesting wins
+        this.hiddenNodes.add(depId);
       });
     });
   }
@@ -870,14 +976,22 @@ export class Roadmapper implements OnInit, AfterViewInit {
     const toggleHandler = (e: Event) => {
       e.stopPropagation();
       if (this.expandedSS.has(n.id)) {
+        // Collapsing: remove from expanded and reset size to default like any other PMO
         this.expandedSS.delete(n.id);
+        n.w = this.DEFAULT_NODE_SIZE.w;
+        n.h = this.DEFAULT_NODE_SIZE.h;
       } else {
+        // Expanding
         this.expandedSS.add(n.id);
       }
       this.cleanUpNodesAndLinks();
       this.drawNodes();
       this.drawLinks();
     };
+    // Prevent parent draggable/panning from capturing the pointer on toggle interactions
+    const stopPD = (e: Event) => { e.stopPropagation(); e.preventDefault(); };
+    toggle.addEventListener('pointerdown', stopPD);
+    symbol.addEventListener('pointerdown', stopPD);
     toggle.addEventListener('click', toggleHandler);
     symbol.addEventListener('click', toggleHandler);
 
@@ -958,7 +1072,7 @@ export class Roadmapper implements OnInit, AfterViewInit {
         const src: NodeModel = {x: p0.x, y: p0.y, w: childW, h: childH} as any;
         const dst: NodeModel = {x: p1.x, y: p1.y, w: childW, h: childH} as any;
         const path = this.createEl('path', {class: 'link', 'marker-end': 'url(#arrow)'}, innerLinksGroup);
-        path.setAttribute('d', this.linkPath(src, dst));
+        path.setAttribute('d', this.linkPathAnchored(src, dst));
       });
     };
 
@@ -1036,10 +1150,13 @@ export class Roadmapper implements OnInit, AfterViewInit {
   }
 
   private drawNodes(): void {
-    // Rebuild nested ownership mapping based on current expanded SS
+    // Rebuild nested ownership mapping and hidden set based on current expanded SS
     this.rebuildNestedOwnership();
 
     this.nodes.forEach(n => {
+      // Skip nodes hidden because they are internals of collapsed SS
+      if (this.hiddenNodes.has(n.id)) return;
+
       // If the node is owned (nested) by an expanded SS, skip drawing it at top level
       const owner = this.nestedNodeOwner.get(n.id);
       if (owner && owner !== n.id) return;
@@ -1048,7 +1165,12 @@ export class Roadmapper implements OnInit, AfterViewInit {
         this.drawExpandedSS(n);
       } else {
         // collapsed SS or non-SS: draw default
-        // For SS collapsed, add an expand toggle button
+        // Ensure collapsed SS has default size like any other PMO
+        if (n.nodeClass === 'ss' && !this.expandedSS.has(n.id)) {
+          n.w = this.DEFAULT_NODE_SIZE.w;
+          n.h = this.DEFAULT_NODE_SIZE.h;
+        }
+
         this.drawDefaultNode(n);
         if (n.nodeClass === 'ss') {
           const g = this.nodeGroups.get(n.id)!;
@@ -1072,6 +1194,10 @@ export class Roadmapper implements OnInit, AfterViewInit {
             this.drawNodes();
             this.drawLinks();
           };
+          // Prevent parent draggable/panning from capturing the pointer on toggle interactions
+          const stopPD = (e: Event) => { e.stopPropagation(); e.preventDefault(); };
+          toggle.addEventListener('pointerdown', stopPD);
+          symbol.addEventListener('pointerdown', stopPD);
           toggle.addEventListener('click', toggleHandler);
           symbol.addEventListener('click', toggleHandler);
         }
