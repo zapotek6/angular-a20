@@ -981,6 +981,7 @@ export class Roadmapper implements OnInit, AfterViewInit {
       // Make inner draggable within the SS bounds
       this.makeInnerDraggable(
         cg as SVGGElement,
+        g as SVGGElement,
         n,
         id,
         localPos,
@@ -1098,10 +1099,12 @@ export class Roadmapper implements OnInit, AfterViewInit {
     group.style.cursor = "grab";
 
     group.addEventListener("pointerdown", (e: PointerEvent) => {
+      // Compute pointer position in the root (content) coordinate system
+      const p = this.clientToRootPoint(e);
       this.drag = {
         model,
-        startX: e.clientX,
-        startY: e.clientY,
+        startX: p.x, // store LOCAL (root) pointer position at drag start
+        startY: p.y,
         origX: model.x,
         origY: model.y,
         el: group
@@ -1112,8 +1115,10 @@ export class Roadmapper implements OnInit, AfterViewInit {
 
     group.addEventListener("pointermove", (e: PointerEvent) => {
       if (!this.drag || this.isPanning) return;
-      const dx = e.clientX - this.drag.startX;
-      const dy = e.clientY - this.drag.startY;
+      // Recompute pointer position in local (root) coords and move node so the pointer sticks
+      const p = this.clientToRootPoint(e);
+      const dx = p.x - this.drag.startX;
+      const dy = p.y - this.drag.startY;
       this.drag.model.x = this.drag.origX + dx;
       this.drag.model.y = this.drag.origY + dy;
       this.drag.el.setAttribute("transform", `translate(${this.drag.model.x},${this.drag.model.y})`);
@@ -1139,6 +1144,7 @@ export class Roadmapper implements OnInit, AfterViewInit {
 
   // Make a dependency node inside an expanded SS draggable within the SS
   private makeInnerDraggable(cg: SVGGElement,
+                             coordsRef: SVGGElement,
                              ssNode: NodeModel,
                              childId: string,
                              posMap: Map<string, Point>,
@@ -1160,11 +1166,12 @@ export class Roadmapper implements OnInit, AfterViewInit {
     const onPointerDown = (e: PointerEvent) => {
       e.stopPropagation();
       const p = posMap.get(childId) || {x: opts.padding, y: opts.headerH + opts.padding};
+      const lp = this.clientToElementPoint(e, coordsRef);
       this.innerDrag = {
         ssId: ssNode.id,
         nodeId: childId,
-        startX: e.clientX,
-        startY: e.clientY,
+        startX: lp.x,
+        startY: lp.y,
         origX: p.x,
         origY: p.y,
         el: cg
@@ -1176,8 +1183,10 @@ export class Roadmapper implements OnInit, AfterViewInit {
     const onPointerMove = (e: PointerEvent) => {
       if (!this.innerDrag) return;
       e.stopPropagation();
-      const dx = e.clientX - this.innerDrag.startX;
-      const dy = e.clientY - this.innerDrag.startY;
+      // Convert pointer to SS-local coordinates via CTM inverse
+      const lp = this.clientToElementPoint(e, coordsRef);
+      const dx = lp.x - this.innerDrag.startX;
+      const dy = lp.y - this.innerDrag.startY;
       let nx = this.innerDrag.origX + dx;
       let ny = this.innerDrag.origY + dy;
       // optional snapping using active grid
@@ -1252,7 +1261,7 @@ export class Roadmapper implements OnInit, AfterViewInit {
       if (this.drag) return;
       const target = e.target as Element | null;
       // Start panning only if the click is NOT on a node
-      if (target && target.closest(".node")) return;
+      if (target && target.closest(".pmo")) return;
 
       this.isPanning = true;
       this.panStart.x = e.clientX;
@@ -1303,10 +1312,10 @@ export class Roadmapper implements OnInit, AfterViewInit {
       group?.addEventListener("contextmenu", (e: PointerEvent) => {
         if (this.isPanning) return;
         const target = e.target as Element | null;
-        // Start panning only if the click is NOT on a node
-        if (target && target.closest(".node")) return;
+        // Only allow context menu for PMO nodes; ignore if it wasn't on a PMO element
+        if (!(target && target.closest(".pmo"))) return;
 
-        this.openForNode(e, this.ctxMenuRef, model);
+        this.openForNode(e as unknown as MouseEvent, this.ctxMenuRef, model);
       });
   }
 
@@ -1354,6 +1363,27 @@ export class Roadmapper implements OnInit, AfterViewInit {
     this.zoom /= 1.2;
     this.applyZoom();
   }*/
+
+  // Convert a PointerEvent's client coordinates into the coordinate system of a given SVG element
+  private clientToElementPoint(e: PointerEvent, element: SVGGraphicsElement): Point {
+    const svg = this.stage as unknown as SVGSVGElement | null;
+    if (!svg) return { x: 0, y: 0 };
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX;
+    pt.y = e.clientY;
+    const ctm = element.getScreenCTM();
+    if (!ctm) return { x: 0, y: 0 };
+    const inv = ctm.inverse();
+    const res = pt.matrixTransform(inv);
+    return { x: res.x, y: res.y };
+  }
+
+  // Convert a PointerEvent to the root (<g id="root">) coordinate system
+  private clientToRootPoint(e: PointerEvent): Point {
+    const root = this.gRoot as unknown as SVGGraphicsElement | null;
+    if (!root) return { x: 0, y: 0 };
+    return this.clientToElementPoint(e, root);
+  }
 
   private getActiveSnapGrid(): number | null {
     if (this.snapToPrimaryGrid) return this.PRIMARY_GRID_SIZE;
