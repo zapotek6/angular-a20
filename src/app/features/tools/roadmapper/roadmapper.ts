@@ -83,6 +83,7 @@ interface NodeModel {
   y: number;
   w: number;
   h: number;
+  collapsed: boolean;
 }
 
 interface LinkModel {
@@ -141,8 +142,7 @@ export class Roadmapper implements OnInit, AfterViewInit {
   pmosByProjectKey = new Map<string, Pmo>();
   linkEls = new Map<string, SVGPathElement>();
   nodeGroups = new Map<string, SVGGElement>();
-  // Expanded SS state and nested ownership mapping
-  expandedSS: Set<string> = new Set<string>();
+  // Nested ownership mapping for nodes drawn inside an expanded SS
   // Maps nodeId -> owning SSId when the node is drawn nested inside an expanded SS
   nestedNodeOwner: Map<string, string> = new Map<string, string>();
   // Nodes hidden due to being internals of collapsed SS
@@ -322,6 +322,10 @@ export class Roadmapper implements OnInit, AfterViewInit {
       });
     }
   }
+  private isExpanded(n: NodeModel): boolean {
+    return n.nodeClass === 'ss' && !n.collapsed;
+  }
+
   // Return current absolute positions as a Layout
   public getCurrentLayout(name?: string, description?: string): Layout {
     const layout = new Layout();
@@ -355,8 +359,8 @@ export class Roadmapper implements OnInit, AfterViewInit {
       ln.pos = new LayoutPosition();
       ln.pos.x = absX;
       ln.pos.y = absY;
-      // Persist collapsed state for SS nodes (expandedSS contains expanded ones)
-      ln.collapsed = (n.nodeClass === 'ss') ? !this.expandedSS.has(n.id) : false;
+      // Persist collapsed state for SS nodes based on node.collapsed
+      ln.collapsed = (n.nodeClass === 'ss') ? n.collapsed : false;
       ln.hidden = false;
 
       layout.nodes.push(ln);
@@ -391,20 +395,21 @@ export class Roadmapper implements OnInit, AfterViewInit {
       }
     });
 
-    // Rebuild SS expanded/collapsed state based on layout's collapsed flag
-    this.expandedSS.clear();
+    // Apply collapsed state for SS nodes from layout's collapsed flag
     this.nodes.forEach((n, id) => {
       if (n.nodeClass === 'ss') {
         const ln = byId.get(id);
         if (ln && typeof ln.collapsed === 'boolean') {
-          if (!ln.collapsed) this.expandedSS.add(id);
+          n.collapsed = ln.collapsed;
         }
       }
     });
 
     // Initialize inner local positions from absolute positions for each expanded SS
     this.innerPositionsBySS.clear();
-    this.expandedSS.forEach(ssId => {
+    this.nodes.forEach((n) => {
+      if (!this.isExpanded(n)) return;
+      const ssId = n.id;
       const ssNode = this.nodeById.get(ssId);
       if (!ssNode) return;
       const deps = Array.from(this.collectDependencies(ssId));
@@ -440,7 +445,7 @@ export class Roadmapper implements OnInit, AfterViewInit {
           this.currentLayout = this.layouts[0];
         }
 
-        let [nodesArray, linksArray] = this.buildNodesAndLinks(this.pmos || []);
+        let [nodesArray, linksArray] = this.buildNodesAndLinks(this.pmos || [], this.currentLayout);
 
         this.nodes = new Map<string, NodeModel>(nodesArray.map(n => [n.id, n]));
         this.nodeById = this.nodes;
@@ -476,17 +481,19 @@ export class Roadmapper implements OnInit, AfterViewInit {
       y: position.y,
       w: size.w,
       h: size.h,
+      collapsed: false,
     };
     return node;
   }
 
-  private buildNodesAndLinks(pmos: Pmo[]): [NodeModel[], LinkModel[]] {
+  private buildNodesAndLinks(pmos: Pmo[], layout: Layout | undefined): [NodeModel[], LinkModel[]] {
     let nodes: NodeModel[] = [];
 
     let pos = {x: 100, y: 100};
     let sz = {w: 200, h: 100};
     nodes = pmos.map(pmo => {
       let node = this.convertPmoToNode(pmo,pos, sz);
+      node.collapsed = (layout && layout.nodes && layout.nodes.find(n => n.id === pmo.id)?.collapsed) ?? false;
       pos.x += 100;
       pos.y += 100;
       return node;
@@ -853,7 +860,9 @@ export class Roadmapper implements OnInit, AfterViewInit {
     this.hiddenNodes.clear();
 
     // 1) Expanded SS: collect deps and mark ownership so they render nested
-    this.expandedSS.forEach(ssId => {
+    this.nodes.forEach(n => {
+      if (!this.isExpanded(n)) return;
+      const ssId = n.id;
       const deps = this.collectDependencies(ssId);
       deps.forEach(depId => {
         if (depId !== ssId && !this.nestedNodeOwner.has(depId)) {
@@ -863,13 +872,14 @@ export class Roadmapper implements OnInit, AfterViewInit {
     });
 
     // 2) Collapsed SS: hide their internals, unless already nested under an expanded SS
-    this.nodes.forEach((n, ssId) => {
-      if (n.nodeClass !== 'ss') return;
-      if (this.expandedSS.has(ssId)) return; // only collapsed SS here
+    this.nodes.forEach((n) => {
+      if (n.nodeClass !== 'ss' || this.isExpanded(n)) return; // only collapsed SS here
+      const ssId = n.id;
       const deps = this.collectDependencies(ssId);
       deps.forEach(depId => {
         if (depId === ssId) return; // skip self
-        if (this.expandedSS.has(depId)) return; // don't hide other expanded SS roots
+        const dep = this.nodeById.get(depId);
+        if (dep && this.isExpanded(dep)) return; // don't hide other expanded SS roots
         if (this.nestedNodeOwner.has(depId)) return; // expanded nesting wins
         this.hiddenNodes.add(depId);
       });
@@ -975,14 +985,14 @@ export class Roadmapper implements OnInit, AfterViewInit {
     symbol.style.cursor = 'pointer';
     const toggleHandler = (e: Event) => {
       e.stopPropagation();
-      if (this.expandedSS.has(n.id)) {
-        // Collapsing: remove from expanded and reset size to default like any other PMO
-        this.expandedSS.delete(n.id);
+      if (this.isExpanded(n)) {
+        // Collapsing: reset size to default like any other PMO
+        n.collapsed = true;
         n.w = this.DEFAULT_NODE_SIZE.w;
         n.h = this.DEFAULT_NODE_SIZE.h;
       } else {
         // Expanding
-        this.expandedSS.add(n.id);
+        n.collapsed = false;
       }
       this.cleanUpNodesAndLinks();
       this.drawNodes();
@@ -1161,12 +1171,12 @@ export class Roadmapper implements OnInit, AfterViewInit {
       const owner = this.nestedNodeOwner.get(n.id);
       if (owner && owner !== n.id) return;
 
-      if (n.nodeClass === 'ss' && this.expandedSS.has(n.id)) {
+      if (n.nodeClass === 'ss' && this.isExpanded(n)) {
         this.drawExpandedSS(n);
       } else {
         // collapsed SS or non-SS: draw default
         // Ensure collapsed SS has default size like any other PMO
-        if (n.nodeClass === 'ss' && !this.expandedSS.has(n.id)) {
+        if (n.nodeClass === 'ss' && n.collapsed) {
           n.w = this.DEFAULT_NODE_SIZE.w;
           n.h = this.DEFAULT_NODE_SIZE.h;
         }
@@ -1189,7 +1199,7 @@ export class Roadmapper implements OnInit, AfterViewInit {
           symbol.style.cursor = 'pointer';
           const toggleHandler = (e: Event) => {
             e.stopPropagation();
-            this.expandedSS.add(n.id);
+            n.collapsed = false;
             this.cleanUpNodesAndLinks();
             this.drawNodes();
             this.drawLinks();
