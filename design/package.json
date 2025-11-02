@@ -2,7 +2,7 @@
   "private": true,
   "type": "module",
   "devDependencies": {
-    "style-dictionary": "^5.1.0"
+    "style-dictionary": "^5.1.1"
   },
   "scripts": {
     "build": "style-dictionary build"
