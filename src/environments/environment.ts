@@ -1,4 +1,4 @@
 export const environment = {
   production: true,
-  apiUrl: 'https://api.pilauno.com',
+  apiUrl: 'https://api.flow.pilauno.com',
 };

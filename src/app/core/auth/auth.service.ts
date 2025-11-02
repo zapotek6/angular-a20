@@ -6,6 +6,7 @@ import {BroadcasterService} from '../brodacaster.service';
 import {Logger, LogSeverity} from '../logger/logger';
 import {LoggerService} from '../logger/logger.service';
 import {Router} from '@angular/router';
+import {environment} from '../../../environments/environment';
 
 export interface Session {
   user: { email: string };
@@ -90,7 +91,7 @@ export class AuthService {
       'content-type': 'application/json'
     });
     return this.http
-      .post('/api/auth/login', { username: email, password }, { headers, withCredentials: true })
+      .post(environment.apiUrl +'/api/auth/login', { username: email, password }, { headers, withCredentials: true })
       .pipe(
         tap(() => {
           const sess: Session = { user: { email }, tenant, createdAt: Date.now() };
@@ -112,7 +113,7 @@ export class AuthService {
     if (xsrf) headersObj['x-xsrf-token'] = xsrf;
     const headers = new HttpHeaders(headersObj);
 
-    return this.http.post('/api/auth/logout', {}, { headers, withCredentials: true }).pipe(
+    return this.http.post(environment.apiUrl + '/api/auth/logout', {}, { headers, withCredentials: true }).pipe(
       catchError((err) => {
         // Even if network fails, proceed to clear client state to avoid being stuck
         return new Observable<void>((subscriber) => {
