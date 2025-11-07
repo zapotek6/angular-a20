@@ -12,100 +12,8 @@ import {PmoEditorService} from '../../../shared/pmo-editor/pmo-editor.service';
 import {forkJoin, Subscription} from 'rxjs';
 import {Layout, Node as LayoutNode, Position as LayoutPosition} from '../../../core/models/layout';
 
-type Point = { x: number; y: number };
-
-type Size = { w: number; h: number };
-
-class TextMeasure {
-  width: number = 0;
-  height: number = 0;
-  ascent: number = 0;
-  descent: number = 0;
-}
-
-enum TextVert { TOP, MIDDLE, BOTTOM }
-
-enum TextHoriz { LEFT, CENTER, RIGHT }
-
-class Text {
-  text: string = '';
-  measure: TextMeasure = new TextMeasure();
-
-  static new(text: string, measure: TextMeasure): Text {
-    let t = new Text();
-    t.text = text;
-    t.measure = measure;
-    return t;
-  }
-
-  height(): number {
-    return this.measure.height;
-  }
-
-  width(): number {
-    return this.measure.width;
-  }
-}
-
-class SplitTextInRowResult {
-  rows: Text[] = [];
-  style?: CSSStyleDeclaration;
-
-  height(): number {
-    return this.rows.reduce((acc, row) => acc + row.height(), 0);
-  }
-
-  maxWidth(): number {
-    return this.rows.reduce(
-      (max, row) => Math.max(max, row.width()),
-      0
-    );
-  }
-}
-
-
-interface Pill {
-  visible: boolean;
-  text: string;
-  class: string;
-}
-
-interface NodeModel {
-  nodeClass: string;
-  id: string;
-  projectId: string,
-  key: string;
-  title: string;
-  pill?: Pill;
-  meta: string;
-  ticket: string;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  collapsed: boolean;
-}
-
-interface LinkModel {
-  id: string;
-  from: string;
-  to: string;
-}
-
-interface DragState {
-  model: NodeModel;
-  startX: number;
-  startY: number;
-  origX: number;
-  origY: number;
-  el: SVGGElement;
-}
-
-type StyleContext = {
-  styles?: CSSStyleDeclaration,
-  remFontSize: number,
-  emFontSize: number
-}
+import { Point, Size, TextMeasure, Text, SplitTextInRowResult, Pill, NodeModel, LinkModel, DragState, StyleContext, TextHoriz, TextVert } from './roadmapper.models';
+import { measureTextCanvas as measureTextCanvasUtil, parseCssValueToPx as parseCssValueToPxUtil, sumCssValuesToPx as sumCssValuesToPxUtil, splitsText as splitsTextUtil, splitsTextInRows as splitsTextInRowsUtil, removeLastWord as removeLastWordUtil, ellipsizeRows as ellipsizeRowsUtil, getTextPosition as getTextPositionUtil } from './roadmapper.text-utils';
 
 const svgns = "http://www.w3.org/2000/svg";
 
@@ -678,123 +586,38 @@ export class Roadmapper implements OnInit, AfterViewInit {
     text: string,
     font: string
   ): { width: number; height: number; ascent: number; descent: number } {
-    // Create an offscreen canvas
-
-    if (!this.ctx) {
-      throw new Error('2D canvas context not supported');
-    }
-
-    // Define the font (same syntax as CSS)
-    this.ctx.font = `${font}`;
-
-    // Measure text metrics
-    const metrics = this.ctx.measureText(text);
-
-    // Compute height from ascent + descent
-    const ascent = metrics.actualBoundingBoxAscent;
-    const descent = metrics.actualBoundingBoxDescent;
-
-    return {
-      width: metrics.width,
-      height: ascent + descent,
-      ascent,
-      descent,
-    };
+    if (!this.ctx) throw new Error('2D canvas context not supported');
+    return measureTextCanvasUtil(this.ctx, text, font);
   }
 
   private parseCssValueToPx = (cssValue: string, ctx: StyleContext): number => {
-    let value = parseFloat(cssValue);
-    let unit = cssValue.replace(/[0-9.\-]/g, '').trim();
-    switch (unit) {
-      case 'px':
-      case '':
-        return value;
-      case 'rem':
-        return value * ctx.remFontSize;
-      case 'em':
-        return value * ctx.emFontSize;
-      default:
-        throw new Error(`Unsupported unit: ${unit}`);
-    }
+    return parseCssValueToPxUtil(cssValue, ctx);
   };
 
   private sumCssValuesToPx(ctx: StyleContext, ...cssValues: string[]): number {
-    let sum = 0;
-    cssValues.forEach((value, i) => {
-      sum += this.parseCssValueToPx(value, ctx);
-    });
-
-    return sum;
+    return sumCssValuesToPxUtil(ctx, ...cssValues);
   }
 
   private splitsText(text: string): string[] {
-    return text.split(/\s+/);
+    return splitsTextUtil(text);
   }
 
   private splitsTextInRows(text: string, style: CSSStyleDeclaration, maxWidth: number): SplitTextInRowResult {
-    let splitTextInRows: SplitTextInRowResult = new SplitTextInRowResult();
-    splitTextInRows.style = style;
-    //let rows: Text[] = [];
-    let fragments = this.splitsText(text);
-    let rowId = 0;
-    splitTextInRows.rows[rowId] = new Text();
-    for (let fragment of fragments) {
-      let measure = splitTextInRows.rows[rowId].text + ' ' + fragment;
-      let textSize = this.measureTextCanvas(measure, style.font);
-      if (textSize.width > maxWidth) { // Freeze the rows[rowId], start new row and add the
-        rowId++;
-        splitTextInRows.rows[rowId] = Text.new(fragment, this.measureTextCanvas(fragment, style.font));
-      } else {
-        splitTextInRows.rows[rowId].text = splitTextInRows.rows[rowId].text + ' ' + fragment;
-        splitTextInRows.rows[rowId].measure = this.measureTextCanvas(splitTextInRows.rows[rowId].text, style.font);
-      }
-    }
-
-    return splitTextInRows;
+    if (!this.ctx) throw new Error('2D canvas context not supported');
+    return splitsTextInRowsUtil(this.ctx, text, style, maxWidth);
   }
 
   private removeLastWord(text: string): string {
-    const parts = text.trim().split(/\s+/);   // split on one or more spaces
-    parts.pop();                              // remove the last word
-    return parts.join(' ');
+    return removeLastWordUtil(text);
   }
 
   private ellipsizeRows(splitRowsResult: SplitTextInRowResult, maxHeight: number, ctx: StyleContext): Text[] {
-    if (splitRowsResult.style === undefined || splitRowsResult.style.font === undefined) {
-      throw new Error('style not defined (CSSStyleDeclaration)');
-    }
-    let rows: Text[] = [];
-    let height = 0;
-    for (let row of splitRowsResult.rows) {
-      height += this.parseCssValueToPx(splitRowsResult.style.lineHeight, ctx);
-      if (height > maxHeight) {
-        let lastId = rows.length - 1;
-        rows[lastId].text = this.removeLastWord(rows[lastId].text) + ' ...';
-        rows[lastId].measure = this.measureTextCanvas(rows[lastId].text, splitRowsResult.style.font);
-        return rows;
-      }
-      rows.push(row);
-    }
-    return rows;
+    if (!this.ctx) throw new Error('2D canvas context not supported');
+    return ellipsizeRowsUtil(this.ctx, splitRowsResult, maxHeight, ctx);
   }
 
   private getTextPosition(ctx: StyleContext) {
-
-    if (!ctx.styles) throw new Error('style not defined');
-    return {
-      horizontal: {
-        align: ctx.styles.textAlign,
-        indent: this.parseCssValueToPx(ctx.styles.textIndent, ctx),
-        paddingLeft: this.parseCssValueToPx(ctx.styles.paddingLeft, ctx),
-        paddingRight: this.parseCssValueToPx(ctx.styles.paddingRight, ctx)
-      },
-      vertical: {
-        align: ctx.styles.verticalAlign,
-        lineHeight: this.parseCssValueToPx(ctx.styles.lineHeight, ctx),
-        paddingTop: this.parseCssValueToPx(ctx.styles.paddingTop, ctx),
-        paddingBottom: this.parseCssValueToPx(ctx.styles.paddingBottom, ctx)
-      }
-    };
+    return getTextPositionUtil(ctx);
   }
 
   private buildComponent(text: string, textClass: string, rectClass: string, origin: Point, size: Size, ctx: StyleContext, parent: SVGElement): SVGGElement {
