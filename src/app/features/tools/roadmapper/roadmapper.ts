@@ -14,6 +14,7 @@ import {Layout, Node as LayoutNode, Position as LayoutPosition} from '../../../c
 
 import { Point, Size, TextMeasure, Text, SplitTextInRowResult, Pill, NodeModel, LinkModel, DragState, StyleContext, TextHoriz, TextVert } from './roadmapper.models';
 import { measureTextCanvas as measureTextCanvasUtil, parseCssValueToPx as parseCssValueToPxUtil, sumCssValuesToPx as sumCssValuesToPxUtil, splitsText as splitsTextUtil, splitsTextInRows as splitsTextInRowsUtil, removeLastWord as removeLastWordUtil, ellipsizeRows as ellipsizeRowsUtil, getTextPosition as getTextPositionUtil } from './roadmapper.text-utils';
+import {getEmInPxFromParent, getRemInPx} from './roadmapper.ui-utils';
 
 const svgns = "http://www.w3.org/2000/svg";
 
@@ -371,6 +372,92 @@ export class Roadmapper implements OnInit, AfterViewInit {
     });
   }
 
+  private cleanUpNodesAndLinks() {
+    this.gNodes?.replaceChildren();
+    this.gLinks?.replaceChildren();
+  }
+
+  private drawNodes(): void {
+    // Rebuild nested ownership mapping and hidden set based on current expanded SS
+    this.rebuildNestedOwnership();
+
+    this.nodes.forEach(n => {
+      // Skip nodes hidden because they are internals of collapsed SS
+      if (this.hiddenNodes.has(n.id)) return;
+
+      // If the node is owned (nested) by an expanded SS, skip drawing it at top level
+      const owner = this.nestedNodeOwner.get(n.id);
+      if (owner && owner !== n.id) return;
+
+      if (n.nodeClass === 'ss' && this.isExpanded(n)) {
+        this.drawExpandedSS(n);
+      } else {
+        // collapsed SS or non-SS: draw default
+        // Ensure collapsed SS has default size like any other PMO
+        if (n.nodeClass === 'ss' && n.collapsed) {
+          n.w = this.DEFAULT_NODE_SIZE.w;
+          n.h = this.DEFAULT_NODE_SIZE.h;
+        }
+
+        this.drawDefaultNode(n);
+        if (n.nodeClass === 'ss') {
+          const g = this.nodeGroups.get(n.id)!;
+          const ctx: StyleContext = { emFontSize: getEmInPxFromParent(g), remFontSize: getRemInPx() } as any;
+          const headerRowH = this.parseCssValueToPx('1.5rem', ctx);
+          const btnSize = headerRowH * 0.8;
+          const btnX = n.w - btnSize - 6;
+          const btnY = (headerRowH - btnSize) / 2;
+          const toggle = this.createEl('rect', {x: btnX, y: btnY, width: btnSize, height: btnSize, rx: 4, ry: 4, class: 'toggle'}, g);
+          const symbol = this.createEl('text', {class: 'toggle-symbol'}, g);
+          symbol.setAttribute('x', String(btnX + btnSize / 2));
+          symbol.setAttribute('y', String(btnY + btnSize / 2 + 4));
+          symbol.setAttribute('text-anchor', 'middle');
+          symbol.textContent = '+';
+          toggle.style.cursor = 'pointer';
+          symbol.style.cursor = 'pointer';
+          const toggleHandler = (e: Event) => {
+            e.stopPropagation();
+            n.collapsed = false;
+            this.cleanUpNodesAndLinks();
+            this.drawNodes();
+            this.drawLinks();
+          };
+          // Prevent parent draggable/panning from capturing the pointer on toggle interactions
+          const stopPD = (e: Event) => { e.stopPropagation(); e.preventDefault(); };
+          toggle.addEventListener('pointerdown', stopPD);
+          symbol.addEventListener('pointerdown', stopPD);
+          toggle.addEventListener('click', toggleHandler);
+          symbol.addEventListener('click', toggleHandler);
+        }
+      }
+    });
+  }
+
+  private drawLinks(): void {
+    // Redraw top-level links only for nodes that are not nested inside an expanded SS
+    // Clear existing links elements each time to avoid stale paths
+    this.gLinks?.replaceChildren();
+    this.linkEls.clear();
+
+    this.links.forEach(l => {
+      // Skip links where either endpoint is nested inside an expanded SS or hidden (collapsed SS internals)
+      const ownerFrom = this.nestedNodeOwner.get(l.from);
+      const ownerTo = this.nestedNodeOwner.get(l.to);
+      if ((ownerFrom && ownerFrom !== l.from) || (ownerTo && ownerTo !== l.to)) return;
+      if (this.hiddenNodes.has(l.from) || this.hiddenNodes.has(l.to)) return;
+
+      const s = this.nodeById.get(l.from);
+      const t = this.nodeById.get(l.to);
+      if (!s || !t) return;
+      let path = this.linkEls.get(l.id);
+      if (!path) {
+        path = this.createEl("path", {class: "link", "marker-end": "url(#arrow)"}, this.gLinks);
+        this.linkEls.set(l.id, path);
+      }
+      path.setAttribute("d", this.linkPathAnchored(s, t));
+    });
+  }
+
   private convertPmoToNode(pmo: Pmo, position: Point, size: Size): NodeModel {
     let node: NodeModel = {
       nodeClass: `${pmo.kind.toLowerCase()}`,
@@ -440,7 +527,7 @@ export class Roadmapper implements OnInit, AfterViewInit {
     return el;
   }
 
-  private centerRight(n: NodeModel): Point {
+  /*private centerRight(n: NodeModel): Point {
     return {x: n.x + n.w, y: n.y + n.h / 2};
   }
 
@@ -448,7 +535,7 @@ export class Roadmapper implements OnInit, AfterViewInit {
     return {x: n.x, y: n.y + n.h / 2};
   }
 
-  /** Smooth cubic Bezier path from src→dst */
+  /!** Smooth cubic Bezier path from src→dst *!/
   private linkPath(src: NodeModel, dst: NodeModel): string {
     const p0 = this.centerRight(src);
     const p1 = this.centerLeft(dst);
@@ -456,9 +543,10 @@ export class Roadmapper implements OnInit, AfterViewInit {
     const c1 = {x: p0.x + dx, y: p0.y};
     const c2 = {x: p1.x - dx, y: p1.y};
     return `M ${p0.x} ${p0.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${p1.x} ${p1.y}`;
-  }
+  }*/
 
   // --- Anchored link routing using 4 perimeter connection points (side midpoints) per rectangle ---
+
   private anchorsForRect(r: { x: number; y: number; w: number; h: number }): Point[] {
     const x0 = r.x, y0 = r.y;
     const x1 = r.x + r.w, y1 = r.y + r.h;
@@ -545,31 +633,6 @@ export class Roadmapper implements OnInit, AfterViewInit {
     return `M ${aOut.x} ${aOut.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${bOut.x} ${bOut.y}`;
   }
 
-  private drawLinks(): void {
-    // Redraw top-level links only for nodes that are not nested inside an expanded SS
-    // Clear existing links elements each time to avoid stale paths
-    this.gLinks?.replaceChildren();
-    this.linkEls.clear();
-
-    this.links.forEach(l => {
-      // Skip links where either endpoint is nested inside an expanded SS or hidden (collapsed SS internals)
-      const ownerFrom = this.nestedNodeOwner.get(l.from);
-      const ownerTo = this.nestedNodeOwner.get(l.to);
-      if ((ownerFrom && ownerFrom !== l.from) || (ownerTo && ownerTo !== l.to)) return;
-      if (this.hiddenNodes.has(l.from) || this.hiddenNodes.has(l.to)) return;
-
-      const s = this.nodeById.get(l.from);
-      const t = this.nodeById.get(l.to);
-      if (!s || !t) return;
-      let path = this.linkEls.get(l.id);
-      if (!path) {
-        path = this.createEl("path", {class: "link", "marker-end": "url(#arrow)"}, this.gLinks);
-        this.linkEls.set(l.id, path);
-      }
-      path.setAttribute("d", this.linkPathAnchored(s, t));
-    });
-  }
-
   private fitTextToRect(textEl: SVGTextElement, rectWidth: number) {
     const text = textEl.textContent || "";
     const bbox = textEl.getBBox();
@@ -620,6 +683,7 @@ export class Roadmapper implements OnInit, AfterViewInit {
     return getTextPositionUtil(ctx);
   }
 
+
   private buildComponent(text: string, textClass: string, rectClass: string, origin: Point, size: Size, ctx: StyleContext, parent: SVGElement): SVGGElement {
     const group = this.createEl("g", {transform: `translate(${origin.x}, ${origin.y})`}, parent);
 
@@ -657,24 +721,6 @@ export class Roadmapper implements OnInit, AfterViewInit {
     parent.appendChild(group);
 
     return group;
-  }
-
-  private getRemInPx(): number {
-    return parseFloat(getComputedStyle(document.documentElement).fontSize);
-  }
-
-  private getEmInPxFromParent(child: Element): number {
-    const parent = child.parentElement!;
-    return parseFloat(getComputedStyle(parent).fontSize);
-  }
-
-  private getEmInPxFromSelf(child: Element): number {
-    return parseFloat(getComputedStyle(child).fontSize);
-  }
-
-  private cleanUpNodesAndLinks() {
-    this.gNodes?.replaceChildren();
-    this.gLinks?.replaceChildren();
   }
 
   private rebuildNestedOwnership(): void {
@@ -736,8 +782,8 @@ export class Roadmapper implements OnInit, AfterViewInit {
     this.createEl("rect", {class: `pmo ${n.nodeClass}`, width: n.w, height: n.h}, g);
 
     const ctx: StyleContext = {
-      emFontSize: this.getEmInPxFromParent(g),
-      remFontSize: this.getRemInPx(),
+      emFontSize: getEmInPxFromParent(g),
+      remFontSize: getRemInPx(),
     };
 
     // Header: key + pill row
@@ -765,8 +811,8 @@ export class Roadmapper implements OnInit, AfterViewInit {
 
     // Compute text/layout context
     const ctx: StyleContext = {
-      emFontSize: this.getEmInPxFromParent(g),
-      remFontSize: this.getRemInPx(),
+      emFontSize: getEmInPxFromParent(g),
+      remFontSize: getRemInPx(),
     };
 
     // Header heights
@@ -917,7 +963,7 @@ export class Roadmapper implements OnInit, AfterViewInit {
       // child rectangle
       this.createEl('rect', {class: `pmo ${child.nodeClass}`, width: childW, height: childH}, cg);
       // child key and title minimal info
-      const cctx: StyleContext = { emFontSize: this.getEmInPxFromParent(cg), remFontSize: this.getRemInPx() } as any;
+      const cctx: StyleContext = { emFontSize: getEmInPxFromParent(cg), remFontSize: getRemInPx() } as any;
       let co = {x: 4, y: 2};
       let csz = {w: childW - 8, h: this.parseCssValueToPx('1.2rem', ctx)};
       this.buildComponent(child.key, 'key', 'key', co, csz, cctx, cg);
@@ -981,63 +1027,6 @@ export class Roadmapper implements OnInit, AfterViewInit {
     this.makeClickable(g, n);
     this.setupCtxMenuForNode(g, n);
   }
-
-  private drawNodes(): void {
-    // Rebuild nested ownership mapping and hidden set based on current expanded SS
-    this.rebuildNestedOwnership();
-
-    this.nodes.forEach(n => {
-      // Skip nodes hidden because they are internals of collapsed SS
-      if (this.hiddenNodes.has(n.id)) return;
-
-      // If the node is owned (nested) by an expanded SS, skip drawing it at top level
-      const owner = this.nestedNodeOwner.get(n.id);
-      if (owner && owner !== n.id) return;
-
-      if (n.nodeClass === 'ss' && this.isExpanded(n)) {
-        this.drawExpandedSS(n);
-      } else {
-        // collapsed SS or non-SS: draw default
-        // Ensure collapsed SS has default size like any other PMO
-        if (n.nodeClass === 'ss' && n.collapsed) {
-          n.w = this.DEFAULT_NODE_SIZE.w;
-          n.h = this.DEFAULT_NODE_SIZE.h;
-        }
-
-        this.drawDefaultNode(n);
-        if (n.nodeClass === 'ss') {
-          const g = this.nodeGroups.get(n.id)!;
-          const ctx: StyleContext = { emFontSize: this.getEmInPxFromParent(g), remFontSize: this.getRemInPx() } as any;
-          const headerRowH = this.parseCssValueToPx('1.5rem', ctx);
-          const btnSize = headerRowH * 0.8;
-          const btnX = n.w - btnSize - 6;
-          const btnY = (headerRowH - btnSize) / 2;
-          const toggle = this.createEl('rect', {x: btnX, y: btnY, width: btnSize, height: btnSize, rx: 4, ry: 4, class: 'toggle'}, g);
-          const symbol = this.createEl('text', {class: 'toggle-symbol'}, g);
-          symbol.setAttribute('x', String(btnX + btnSize / 2));
-          symbol.setAttribute('y', String(btnY + btnSize / 2 + 4));
-          symbol.setAttribute('text-anchor', 'middle');
-          symbol.textContent = '+';
-          toggle.style.cursor = 'pointer';
-          symbol.style.cursor = 'pointer';
-          const toggleHandler = (e: Event) => {
-            e.stopPropagation();
-            n.collapsed = false;
-            this.cleanUpNodesAndLinks();
-            this.drawNodes();
-            this.drawLinks();
-          };
-          // Prevent parent draggable/panning from capturing the pointer on toggle interactions
-          const stopPD = (e: Event) => { e.stopPropagation(); e.preventDefault(); };
-          toggle.addEventListener('pointerdown', stopPD);
-          symbol.addEventListener('pointerdown', stopPD);
-          toggle.addEventListener('click', toggleHandler);
-          symbol.addEventListener('click', toggleHandler);
-        }
-      }
-    });
-  }
-
 
   private makeClickable(group: SVGGElement, node: NodeModel) {
     group.addEventListener('click', e => {
