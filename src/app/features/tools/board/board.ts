@@ -24,6 +24,7 @@ export class Board {
   private pan: { startX: number; startY: number; startOffsetX: number; startOffsetY: number } | null = null;
   private spacePressed = false;
   selectionPaddingUnits = 0.5; // visual padding around selection in board units
+  titlePaddingUnits = 1; // inner padding for title area within a card (board units)
 
   // Hover and linking state
   protected hoverCardId: string | null = null;

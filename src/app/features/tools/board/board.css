@@ -6,8 +6,24 @@
 
 /* Cards in board units; strokes scaled by unit scaling */
 .card-rect { rx: 0.05rem; ry: 0.05rem; stroke: #888; stroke-width: 0.2; }
+/* Old inline SVG text styles kept for reference; title now uses foreignObject */
 .card-title { font: 1.2px/1.2 sans-serif; fill: #222; }
-.card-body { font: 1px/1.2 sans-serif; fill: #444; }
+.card-body { display: none; }
+
+/* Title inside foreignObject */
+.card-title-fo { pointer-events: none; }
+.card-title-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  font: 1.2px/1.2 sans-serif;
+  color: #222;
+  width: 100%;
+  height: 100%;
+}
 
 
 /* Selection */

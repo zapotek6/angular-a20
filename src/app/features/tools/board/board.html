@@ -108,10 +108,14 @@
              [attr.transform]="'translate(' + c.x + ',' + c.y + ')'"><!-- units -->
             <rect class="card-rect" [class.selected]="s.selectedCardIds.includes(c.id)" [attr.width]="c.width" [attr.height]="c.height" [attr.fill]="c.color"
                   (mousedown)="onCardPointerDown($event, c)"></rect>
-            <!-- Title text -->
-            <text x="8" y="18" class="card-title">{{ c.title }}</text>
-            <!-- Body text (simple single-line in v1) -->
-            <text x="8" y="36" class="card-body">{{ c.body }}</text>
+            <!-- Centered, wrapped title inside card using foreignObject -->
+            <foreignObject class="card-title-fo"
+                           [attr.x]="titlePaddingUnits"
+                           [attr.y]="titlePaddingUnits"
+                           [attr.width]="Math.max(0, c.width - 2*titlePaddingUnits)"
+                           [attr.height]="Math.max(0, c.height - 2*titlePaddingUnits)">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="card-title-box">{{ c.title }}</div>
+            </foreignObject>
           </g>
         }
 
