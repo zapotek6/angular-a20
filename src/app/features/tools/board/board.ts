@@ -2,7 +2,7 @@ import {ChangeDetectionStrategy, Component, ElementRef, HostListener, ViewChild}
 import {CommonModule} from '@angular/common';
 import {BoardStateService} from './services/board-state.service';
 import {BoardState, CardModel, LinkModel, MIN_CARD_SIZE_UNITS, UNIT_TO_PX_AT_100} from './models/board.models';
-import {bezierForEndpoints, buildBezierPathD, cubicPoint, getConnectionPoints, nearestConnectionPoint, toCardAbsoluteUnits} from './services/board-geometry';
+import {bezierForEndpoints, bestConnectionPair, buildBezierPathD, cubicPoint, getConnectionPoints, nearestConnectionPoint, toCardAbsoluteUnits} from './services/board-geometry';
 import {map, Observable} from 'rxjs';
 
 @Component({
@@ -453,10 +453,10 @@ export class Board {
     const src = s.cards.find(c => c.id === link.sourceCardId);
     const tgt = s.cards.find(c => c.id === link.targetCardId);
     if (!src || !tgt) return null;
-    const srcCp = (getConnectionPoints(src).find(c => c.id === link.sourcePointId)) || getConnectionPoints(src)[0];
-    const tgtCp = (getConnectionPoints(tgt).find(c => c.id === link.targetPointId)) || getConnectionPoints(tgt)[0];
-    const A = { p: toCardAbsoluteUnits(src, srcCp), cp: srcCp };
-    const B = { p: toCardAbsoluteUnits(tgt, tgtCp), cp: tgtCp };
+    // Dynamically choose the nearest pair of connection points between the two cards
+    const pair = bestConnectionPair(src, tgt);
+    const A = { p: toCardAbsoluteUnits(src, pair.src), cp: pair.src };
+    const B = { p: toCardAbsoluteUnits(tgt, pair.tgt), cp: pair.tgt };
     const {p0, p1, p2, p3} = bezierForEndpoints(A, B);
     return buildBezierPathD(p0, p1, p2, p3);
   }
@@ -496,10 +496,9 @@ export class Board {
     const src = s.cards.find(c => c.id === ln.sourceCardId);
     const tgt = s.cards.find(c => c.id === ln.targetCardId);
     if (!src || !tgt) return null;
-    const srcCp = (getConnectionPoints(src).find(c => c.id === ln.sourcePointId)) || getConnectionPoints(src)[0];
-    const tgtCp = (getConnectionPoints(tgt).find(c => c.id === ln.targetPointId)) || getConnectionPoints(tgt)[0];
-    const A = { p: toCardAbsoluteUnits(src, srcCp), cp: srcCp };
-    const B = { p: toCardAbsoluteUnits(tgt, tgtCp), cp: tgtCp };
+    const pair = bestConnectionPair(src, tgt);
+    const A = { p: toCardAbsoluteUnits(src, pair.src), cp: pair.src };
+    const B = { p: toCardAbsoluteUnits(tgt, pair.tgt), cp: pair.tgt };
     const {p0, p1, p2, p3} = bezierForEndpoints(A, B);
     const t = ln.label?.t ?? 0.5;
     return cubicPoint(p0, p1, p2, p3, t);

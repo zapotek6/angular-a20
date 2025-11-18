@@ -1,4 +1,4 @@
-import {CardModel, ConnectionPoint, LinkModel} from '../models/board.models';
+import {CardModel, ConnectionPoint} from '../models/board.models';
 
 export interface Pt { x: number; y: number; }
 
@@ -37,7 +37,7 @@ export function nearestConnectionPoint(card: CardModel, x: number, y: number): C
   return best;
 }
 
-function dominantDirectionForCp(cp: ConnectionPoint): 'left'|'right'|'up'|'down' {
+export function dominantDirectionForCp(cp: ConnectionPoint): 'left'|'right'|'up'|'down' {
   if (cp.relX <= 0.001) return 'left';
   if (cp.relX >= 0.999) return 'right';
   if (cp.relY <= 0.001) return 'up';
@@ -86,4 +86,37 @@ export function cubicPoint(p0: Pt, p1: Pt, p2: Pt, p3: Pt, t: number): Pt {
 
 export function buildBezierPathD(p0: Pt, p1: Pt, p2: Pt, p3: Pt): string {
   return `M ${p0.x} ${p0.y} C ${p1.x} ${p1.y}, ${p2.x} ${p2.y}, ${p3.x} ${p3.y}`;
+}
+
+// Compute the best (nearest) pair of connection points between two cards.
+// Returns the pair of CPs; absolute coordinates can be derived with toCardAbsoluteUnits.
+export function bestConnectionPair(a: CardModel, b: CardModel): { src: ConnectionPoint; tgt: ConnectionPoint } {
+  const cpsA = getConnectionPoints(a);
+  const cpsB = getConnectionPoints(b);
+  let bestA = cpsA[0];
+  let bestB = cpsB[0];
+  let bestD2 = Number.POSITIVE_INFINITY;
+  const EPS = 1e-9;
+  for (const ca of cpsA) {
+    const pa = toCardAbsoluteUnits(a, ca);
+    const dirA = dominantDirectionForCp(ca);
+    for (const cb of cpsB) {
+      const pb = toCardAbsoluteUnits(b, cb);
+      const dx = pb.x - pa.x;
+      const dy = pb.y - pa.y;
+      const d2 = dx*dx + dy*dy;
+      if (d2 + EPS < bestD2) {
+        bestD2 = d2; bestA = ca; bestB = cb;
+      } else if (Math.abs(d2 - bestD2) <= EPS) {
+        // Tie-breaker: prefer facing directions (left↔right, up↔down)
+        const dirB = dominantDirectionForCp(cb);
+        const facing = (dirA === 'left' && dirB === 'right') ||
+                       (dirA === 'right' && dirB === 'left') ||
+                       (dirA === 'up' && dirB === 'down') ||
+                       (dirA === 'down' && dirB === 'up');
+        if (facing) { bestA = ca; bestB = cb; }
+      }
+    }
+  }
+  return { src: bestA, tgt: bestB };
 }
