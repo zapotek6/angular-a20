@@ -17,6 +17,7 @@ export class BoardStateService {
     boardId: DEFAULT_BOARD_ID,
     cards: [],
     selectedCardIds: [],
+    selectedLinkIds: [],
     viewport: {zoom: 1, offsetX: 0, offsetY: 0},
     links: [],
   });
@@ -36,6 +37,7 @@ export class BoardStateService {
       boardId: current.boardId,
       cards: [...current.cards],
       selectedCardIds: [...current.selectedCardIds],
+      selectedLinkIds: [...current.selectedLinkIds],
       viewport: {...current.viewport},
       links: [...current.links],
     };
@@ -80,30 +82,36 @@ export class BoardStateService {
 
   removeSelected() {
     this.setState(s => {
-      const set = new Set(s.selectedCardIds);
+      const selectedCardSet = new Set(s.selectedCardIds);
+      const selectedLinkSet = new Set(s.selectedLinkIds);
       const deletedIds = new Set<string>();
       s.cards = s.cards.filter(c => {
-        const keep = !set.has(c.id);
+        const keep = !selectedCardSet.has(c.id);
         if (!keep) deletedIds.add(c.id);
         return keep;
       });
+      // First remove explicitly selected links
+      s.links = s.links.filter(l => !selectedLinkSet.has(l.id));
+      // Then remove any links attached to deleted cards
       if (deletedIds.size) {
         s.links = s.links.filter(l => !deletedIds.has(l.sourceCardId) && !deletedIds.has(l.targetCardId));
       }
       s.selectedCardIds = [];
+      s.selectedLinkIds = [];
     });
   }
 
   // Selection
   setSelection(ids: string[]) {
-    this.setState(s => { s.selectedCardIds = Array.from(new Set(ids)); });
+    this.setState(s => { s.selectedCardIds = Array.from(new Set(ids)); s.selectedLinkIds = []; });
   }
-  clearSelection() { this.setSelection([]); }
+  clearSelection() { this.setState(s => { s.selectedCardIds = []; s.selectedLinkIds = []; }); }
   toggleSelection(id: string) {
     this.setState(s => {
       const set = new Set(s.selectedCardIds);
       if (set.has(id)) set.delete(id); else set.add(id);
       s.selectedCardIds = Array.from(set);
+      s.selectedLinkIds = [];
     });
   }
 
@@ -192,5 +200,22 @@ export class BoardStateService {
 
   removeLink(id: string) {
     this.setState(s => { s.links = s.links.filter(l => l.id !== id); });
+  }
+
+  // Link selection (mutually exclusive with card selection)
+  setLinkSelection(ids: string[]) {
+    this.setState(s => {
+      s.selectedLinkIds = Array.from(new Set(ids));
+      s.selectedCardIds = [];
+    });
+  }
+
+  toggleLinkSelection(id: string) {
+    this.setState(s => {
+      const set = new Set(s.selectedLinkIds);
+      if (set.has(id)) set.delete(id); else set.add(id);
+      s.selectedLinkIds = Array.from(set);
+      s.selectedCardIds = [];
+    });
   }
 }

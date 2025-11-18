@@ -128,6 +128,8 @@ export class Board {
     const s = this.board.getSnapshot();
     // Strategy: Space + drag pans; plain drag starts marquee selection
     if (ev.button === 0 && !ev.ctrlKey && !ev.shiftKey && !this.spacePressed) {
+      // Background click/drag starts marquee: clear both selections first
+      this.board.clearSelection();
       const {x, y} = this.screenToBoard(ev, s);
       this.marquee = {x0: x, y0: y, x1: x, y1: y};
     } else if (ev.button === 0 && this.spacePressed) {
@@ -302,7 +304,7 @@ export class Board {
     const s = this.board.getSnapshot();
     if (ev.code === 'Space') { this.spacePressed = true; ev.preventDefault(); }
     if (ev.key === 'Delete' || ev.key === 'Backspace') { this.board.removeSelected(); ev.preventDefault(); }
-    if (ev.key === 'Escape') { this.marquee = null; this.resizing = null; this.dragging = false; this.linkDraft = null; this.hoverTargetCardId = null; this.hoverTargetCpId = null; this.hoverNearCp = false; }
+    if (ev.key === 'Escape') { this.marquee = null; this.resizing = null; this.dragging = false; this.linkDraft = null; this.hoverTargetCardId = null; this.hoverTargetCpId = null; this.hoverNearCp = false; this.board.clearSelection(); }
     const step = 1;
     if (ev.key === 'ArrowLeft') { this.board.nudgeSelected(-step, 0); ev.preventDefault(); }
     if (ev.key === 'ArrowRight') { this.board.nudgeSelected(step, 0); ev.preventDefault(); }
@@ -423,6 +425,18 @@ export class Board {
     };
     (document as any).addEventListener('mousemove', move);
     (document as any).addEventListener('mouseup', up, {once: true});
+  }
+
+  // Link selection
+  onLinkPointerDown(ev: MouseEvent, linkId: string) {
+    ev.stopPropagation();
+    const s = this.board.getSnapshot();
+    if (ev.ctrlKey) {
+      this.board.toggleLinkSelection(linkId);
+    } else {
+      const already = s.selectedLinkIds?.includes(linkId);
+      if (!already) this.board.setLinkSelection([linkId]);
+    }
   }
 
   // Hit test in board units

@@ -40,6 +40,7 @@ export interface BoardState {
   boardId: string;
   cards: CardModel[];
   selectedCardIds: string[];
+  selectedLinkIds: string[]; // links selection (mutually exclusive with cards)
   viewport: ViewportState;
   links: LinkModel[];
 }

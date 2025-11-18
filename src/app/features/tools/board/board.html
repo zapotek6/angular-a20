@@ -44,12 +44,27 @@
           @for (ln of s.links; track ln.id) {
             @let d = getLinkPathD(s, ln);
             @if (d) {
-              <path class="link-path {{ ln.style.dash }}" [attr.d]="d" [attr.stroke]="ln.style.color" [attr.stroke-width]="ln.style.width"
-                    [attr.marker-end]="markerEnd(ln)" [attr.marker-start]="markerStart(ln)"></path>
+              <!-- Invisible wide hit area for easier clicking -->
+              <path class="link-hit-area"
+                    [attr.d]="d"
+                    stroke="transparent"
+                    [attr.stroke-width]="(ln.style.width || 0.5) + 1.5"
+                    fill="none"
+                    (mousedown)="onLinkPointerDown($event, ln.id)"></path>
+
+              <!-- Visible link path -->
+              <path class="link-path {{ ln.style.dash }}"
+                    [class.selected]="s.selectedLinkIds?.includes(ln.id)"
+                    [attr.d]="d"
+                    [attr.stroke]="ln.style.color"
+                    [attr.stroke-width]="ln.style.width"
+                    [attr.marker-end]="markerEnd(ln)"
+                    [attr.marker-start]="markerStart(ln)"
+                    style="pointer-events: none;"></path>
               @if (ln.label?.text) {
                 @let pos = getLinkLabelPos(s, ln);
                 @if (pos) {
-                  <text class="link-label" [attr.x]="pos.x" [attr.y]="pos.y">{{ ln.label?.text }}</text>
+                  <text class="link-label" [attr.x]="pos.x" [attr.y]="pos.y" style="pointer-events: none;">{{ ln.label?.text }}</text>
                 }
               }
             }

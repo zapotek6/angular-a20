@@ -23,6 +23,10 @@
 .link-path.dashed { stroke-dasharray: 2 1; }
 .link-path.dotted { stroke-dasharray: 0.5 0.8; }
 .link-label { font: 1px/1.2 sans-serif; fill: #222; paint-order: stroke; stroke: #fff; stroke-width: 0.15; }
+/* Hit area for selecting links */
+.link-hit-area { cursor: pointer; stroke: transparent; fill: none; }
+/* Selected link visuals */
+.link-path.selected { stroke: #1976d2 !important; stroke-width: 0.7; filter: drop-shadow(0 0 0.3px #1976d2); }
 
 /* Connection points */
 .cp-hot { fill: transparent; cursor: crosshair; pointer-events: all; }

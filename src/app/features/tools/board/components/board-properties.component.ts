@@ -3,7 +3,7 @@ import {CommonModule} from '@angular/common';
 import {FormsModule} from '@angular/forms';
 import {BoardStateService} from '../services/board-state.service';
 import {Observable} from 'rxjs';
-import {BoardState, CardModel} from '../models/board.models';
+import {BoardState, CardModel, LinkModel, LinkStyle} from '../models/board.models';
 
 
 @Component({
@@ -13,13 +13,57 @@ import {BoardState, CardModel} from '../models/board.models';
   template: `
     <div class="board-props">
       @if (state$ | async; as s) {
-        @if (s.selectedCardIds.length === 0) {
-          <p>No card selected.</p>
+        @if ((s.selectedCardIds.length === 0) && (!s.selectedLinkIds || s.selectedLinkIds.length === 0)) {
+          <p>No selection.</p>
+        } @else if (s.selectedLinkIds && s.selectedLinkIds.length > 1 && s.selectedCardIds.length === 0) {
+          <p>Multiple links selected ({{ s.selectedLinkIds.length }} links).</p>
+        } @else if (s.selectedLinkIds && s.selectedLinkIds.length === 1 && s.selectedCardIds.length === 0) {
+          @let ln = getSingleSelectedLink(s);
+          @if (ln) {
+            <div class="section-title">Link Properties</div>
+            <div class="field">
+              <label>Label</label>
+              <input type="text" [ngModel]="ln.label?.text || ''" (ngModelChange)="updateLinkLabel(ln, $event)" />
+            </div>
+            <div class="field">
+              <label>Color</label>
+              <input type="color" [ngModel]="ln.style.color" (ngModelChange)="updateLinkStyle(ln, {color: $event})" />
+            </div>
+            <div class="field small">
+              <label>Width</label>
+              <input type="number" step="0.1" min="0.1" [ngModel]="ln.style.width" (ngModelChange)="updateLinkStyle(ln, {width: toNum($event)})" />
+            </div>
+            <div class="field">
+              <label>Dash</label>
+              <select [ngModel]="ln.style.dash || 'solid'" (ngModelChange)="updateLinkStyle(ln, {dash: $event})">
+                <option value="solid">solid</option>
+                <option value="dashed">dashed</option>
+                <option value="dotted">dotted</option>
+              </select>
+            </div>
+            <div class="field small">
+              <label>Arrow head</label>
+              <select [ngModel]="ln.style.arrowHead || 'none'" (ngModelChange)="updateLinkStyle(ln, {arrowHead: $event})">
+                <option value="none">none</option>
+                <option value="filled">filled</option>
+                <option value="open">open</option>
+              </select>
+            </div>
+            <div class="field small">
+              <label>Arrow tail</label>
+              <select [ngModel]="ln.style.arrowTail || 'none'" (ngModelChange)="updateLinkStyle(ln, {arrowTail: $event})">
+                <option value="none">none</option>
+                <option value="filled">filled</option>
+                <option value="open">open</option>
+              </select>
+            </div>
+          }
         } @else if (s.selectedCardIds.length > 1) {
           <p>Multiple cards selected.</p>
         } @else {
           @let card = getSingleSelected(s);
           @if (card) {
+            <div class="section-title">Card Properties</div>
             <div class="field">
               <label>Title</label>
               <input type="text" [ngModel]="card.title" (ngModelChange)="update(card.id, {title: $event})" />
@@ -43,7 +87,7 @@ import {BoardState, CardModel} from '../models/board.models';
               <input type="number" [ngModel]="card.height" (ngModelChange)="update(card.id, {height: toNum($event)})" />
             </div>
           } @else {
-            <p>No card selected.</p>
+            <p>No selection.</p>
           }
         }
       }
@@ -69,6 +113,22 @@ export class BoardPropertiesComponent {
     const id = s.selectedCardIds[0];
     return s.cards.find(c => c.id === id) ?? null;
   }
+  getSingleSelectedLink(s: BoardState): LinkModel | null {
+    const ids = s.selectedLinkIds || [];
+    if (ids.length !== 1) return null;
+    const id = ids[0];
+    return s.links.find(l => l.id === id) ?? null;
+  }
   update(id: string, patch: Partial<CardModel>) { this.board.updateCard(id, patch); }
+  updateLinkStyle(ln: LinkModel, partial: Partial<LinkStyle>) {
+    const nextStyle: LinkStyle = { ...ln.style, ...partial } as LinkStyle;
+    this.board.updateLink(ln.id, { style: nextStyle });
+  }
+  updateLinkLabel(ln: LinkModel, text: string) {
+    const t = ln.label?.t ?? 0.5;
+    const trimmed = (text ?? '').trim();
+    const next = trimmed.length ? { text: trimmed, t } : undefined;
+    this.board.updateLink(ln.id, { label: next });
+  }
   toNum(v: any) { const n = Number(v); return isNaN(n) ? 0 : n; }
 }

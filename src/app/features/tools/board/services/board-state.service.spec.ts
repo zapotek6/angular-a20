@@ -14,6 +14,7 @@ describe('BoardStateService', () => {
       expect(s.boardId).toBeTruthy();
       expect(s.cards.length).toBe(0);
       expect(s.selectedCardIds.length).toBe(0);
+      expect(s.selectedLinkIds.length).toBe(0);
       expect(s.viewport.zoom).toBe(1);
       expect(s.viewport.offsetX).toBe(0);
       expect(s.viewport.offsetY).toBe(0);
@@ -43,6 +44,7 @@ describe('BoardStateService', () => {
     expect(new Set(service.getSnapshot().selectedCardIds)).toEqual(new Set([a, b]));
     service.clearSelection();
     expect(service.getSnapshot().selectedCardIds.length).toBe(0);
+    expect(service.getSnapshot().selectedLinkIds.length).toBe(0);
   });
 
   it('should move and nudge selected cards', () => {
@@ -118,5 +120,34 @@ describe('BoardStateService', () => {
     expect(snap.cards.find(x => x.id === b)).toBeUndefined();
     // Both links touched card b and must be removed
     expect(snap.links.length).toBe(0);
+  });
+
+  it('link selection API should be mutually exclusive and removable', () => {
+    const a = service.addCardAt(0, 0);
+    const b = service.addCardAt(20, 0);
+    const linkId = service.addLink(a, 'right', b, 'left')!;
+    // Select card then select link → card selection cleared
+    service.setSelection([a]);
+    expect(service.getSnapshot().selectedCardIds).toEqual([a]);
+    service.setLinkSelection([linkId]);
+    expect(service.getSnapshot().selectedCardIds.length).toBe(0);
+    expect(service.getSnapshot().selectedLinkIds).toEqual([linkId]);
+    // Toggle link selection
+    service.toggleLinkSelection(linkId);
+    expect(service.getSnapshot().selectedLinkIds.length).toBe(0);
+    // Toggle again should select
+    service.toggleLinkSelection(linkId);
+    expect(service.getSnapshot().selectedLinkIds).toEqual([linkId]);
+    // Card selection should clear link selection
+    service.setSelection([b]);
+    expect(service.getSnapshot().selectedLinkIds.length).toBe(0);
+    expect(service.getSnapshot().selectedCardIds).toEqual([b]);
+    // removeSelected should delete selected links and clear both
+    const l2 = service.addLink(a, 'right', b, 'left')!;
+    service.setLinkSelection([l2]);
+    service.removeSelected();
+    expect(service.getSnapshot().links.find(l => l.id === l2)).toBeUndefined();
+    expect(service.getSnapshot().selectedCardIds.length).toBe(0);
+    expect(service.getSnapshot().selectedLinkIds.length).toBe(0);
   });
 });
