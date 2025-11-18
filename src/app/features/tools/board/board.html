@@ -69,11 +69,35 @@
               }
             }
           }
+          <!-- Endpoint handles when a single link is selected -->
+          @if (s.selectedLinkIds?.length === 1) {
+            @let ln = getSingleSelectedLink(s);
+            @if (ln) {
+              @let ep = getLinkEndpoints(s, ln);
+              @if (ep) {
+                <!-- Source endpoint -->
+                <circle class="endpoint-hot" [attr.cx]="ep.src.x" [attr.cy]="ep.src.y" [attr.r]="1.2"
+                        (mousedown)="onEndpointHandleDown($event, ln, 'source')"></circle>
+                <circle class="endpoint-handle" [attr.cx]="ep.src.x" [attr.cy]="ep.src.y" [attr.r]="0.6"></circle>
+                <!-- Target endpoint -->
+                <circle class="endpoint-hot" [attr.cx]="ep.tgt.x" [attr.cy]="ep.tgt.y" [attr.r]="1.2"
+                        (mousedown)="onEndpointHandleDown($event, ln, 'target')"></circle>
+                <circle class="endpoint-handle" [attr.cx]="ep.tgt.x" [attr.cy]="ep.tgt.y" [attr.r]="0.6"></circle>
+              }
+            }
+          }
           <!-- Draft link while dragging from a connection point -->
           @if (linkDraft) {
             @let draft = getDraftPathD(s);
             @if (draft) {
               <path class="link-path dashed" [attr.d]="draft.d" stroke="#546e7a" stroke-width="0.5" opacity="0.6"></path>
+            }
+          }
+          <!-- Draft while reconnecting a link endpoint -->
+          @if (endpointDrag) {
+            @let d2 = getEndpointDraftPathD(s);
+            @if (d2) {
+              <path class="link-path dashed" [attr.d]="d2.d" stroke="#1976d2" stroke-width="0.5" opacity="0.6"></path>
             }
           }
         </g>

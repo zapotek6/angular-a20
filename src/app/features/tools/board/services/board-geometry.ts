@@ -1,4 +1,4 @@
-import {CardModel, ConnectionPoint} from '../models/board.models';
+import {CardModel, ConnectionPoint, LinkModel} from '../models/board.models';
 
 export interface Pt { x: number; y: number; }
 
@@ -119,4 +119,66 @@ export function bestConnectionPair(a: CardModel, b: CardModel): { src: Connectio
     }
   }
   return { src: bestA, tgt: bestB };
+}
+
+// Choose effective endpoints for a link, honoring fixed/dynamic anchors.
+// Returns both the ConnectionPoints and their absolute points on the cards.
+export function computeEndpoints(link: LinkModel, src: CardModel, tgt: CardModel): {
+  srcCp: ConnectionPoint; srcPt: Pt; tgtCp: ConnectionPoint; tgtPt: Pt;
+} {
+  // Helper: choose nearest CP on a card to a target absolute point
+  const nearestCpToPoint = (card: CardModel, pt: Pt): ConnectionPoint => {
+    const cps = getConnectionPoints(card);
+    let best = cps[0]; let bestD2 = Number.POSITIVE_INFINITY;
+    for (const cp of cps) {
+      const p = toCardAbsoluteUnits(card, cp);
+      const dx = p.x - pt.x; const dy = p.y - pt.y; const d2 = dx*dx + dy*dy;
+      if (d2 < bestD2) { bestD2 = d2; best = cp; }
+    }
+    return best;
+  };
+
+  // If both dynamic use the best pair directly
+  const srcAnchor = link.sourceAnchor ?? 'dynamic';
+  const tgtAnchor = link.targetAnchor ?? 'dynamic';
+  if (srcAnchor === 'dynamic' && tgtAnchor === 'dynamic') {
+    const pair = bestConnectionPair(src, tgt);
+    const srcPt = toCardAbsoluteUnits(src, pair.src);
+    const tgtPt = toCardAbsoluteUnits(tgt, pair.tgt);
+    return { srcCp: pair.src, srcPt, tgtCp: pair.tgt, tgtPt };
+  }
+
+  // Resolve fixed endpoint(s)
+  let srcCp: ConnectionPoint;
+  if (srcAnchor === 'fixed') {
+    srcCp = (getConnectionPoints(src).find(c => c.id === link.sourcePointId)) || getConnectionPoints(src)[0];
+  } else {
+    // provisional; will resolve after we know target point
+    srcCp = getConnectionPoints(src)[0];
+  }
+  let tgtCp: ConnectionPoint;
+  if (tgtAnchor === 'fixed') {
+    tgtCp = (getConnectionPoints(tgt).find(c => c.id === link.targetPointId)) || getConnectionPoints(tgt)[0];
+  } else {
+    tgtCp = getConnectionPoints(tgt)[0];
+  }
+
+  // If one side is fixed, choose the other nearest to that fixed absolute point.
+  if (srcAnchor === 'fixed' && tgtAnchor === 'dynamic') {
+    const srcPt = toCardAbsoluteUnits(src, srcCp);
+    tgtCp = nearestCpToPoint(tgt, srcPt);
+    const tgtPt = toCardAbsoluteUnits(tgt, tgtCp);
+    return { srcCp, srcPt, tgtCp, tgtPt };
+  }
+  if (tgtAnchor === 'fixed' && srcAnchor === 'dynamic') {
+    const tgtPt = toCardAbsoluteUnits(tgt, tgtCp);
+    srcCp = nearestCpToPoint(src, tgtPt);
+    const srcPt = toCardAbsoluteUnits(src, srcCp);
+    return { srcCp, srcPt, tgtCp, tgtPt };
+  }
+
+  // Both fixed
+  const srcPt = toCardAbsoluteUnits(src, srcCp);
+  const tgtPt = toCardAbsoluteUnits(tgt, tgtCp);
+  return { srcCp, srcPt, tgtCp, tgtPt };
 }

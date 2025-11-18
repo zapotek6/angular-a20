@@ -186,6 +186,8 @@ export class BoardStateService {
       style,
       label,
       routing: 'bezier',
+      sourceAnchor: 'dynamic',
+      targetAnchor: 'dynamic',
     };
     this.setState(st => { st.links = [...st.links, link]; });
     return id;
@@ -200,6 +202,23 @@ export class BoardStateService {
 
   removeLink(id: string) {
     this.setState(s => { s.links = s.links.filter(l => l.id !== id); });
+  }
+
+  // Reconnect an endpoint of a link to a specific card connection point and fix its anchor
+  commitReconnect(linkId: string, end: 'source'|'target', cardId: string, pointId: string): void {
+    this.setState(s => {
+      const i = s.links.findIndex(l => l.id === linkId);
+      if (i < 0) return;
+      const ln = s.links[i];
+      if (end === 'source') {
+        // Disallow self-link in this iteration
+        if (cardId === ln.targetCardId) return; // cancel commit
+        s.links[i] = { ...ln, sourceCardId: cardId, sourcePointId: pointId, sourceAnchor: 'fixed' };
+      } else {
+        if (cardId === ln.sourceCardId) return; // cancel commit
+        s.links[i] = { ...ln, targetCardId: cardId, targetPointId: pointId, targetAnchor: 'fixed' };
+      }
+    });
   }
 
   // Link selection (mutually exclusive with card selection)

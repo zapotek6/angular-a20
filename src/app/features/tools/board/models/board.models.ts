@@ -68,6 +68,8 @@ export interface LinkLabel {
 
 export type LinkRouting = 'bezier'; // future: 'straight' | 'orthogonal'
 
+export type LinkAnchor = 'dynamic' | 'fixed';
+
 export interface LinkModel {
   id: string;
   boardId: string;
@@ -78,4 +80,8 @@ export interface LinkModel {
   style: LinkStyle;
   label?: LinkLabel;
   routing: LinkRouting;
+  // Anchoring controls: when 'fixed', the corresponding *PointId is used as endpoint;
+  // when 'dynamic', the endpoint may be dynamically chosen at render time.
+  sourceAnchor?: LinkAnchor; // default 'dynamic'
+  targetAnchor?: LinkAnchor; // default 'dynamic'
 }

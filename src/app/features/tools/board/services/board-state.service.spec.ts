@@ -150,4 +150,34 @@ describe('BoardStateService', () => {
     expect(service.getSnapshot().selectedCardIds.length).toBe(0);
     expect(service.getSnapshot().selectedLinkIds.length).toBe(0);
   });
+
+  it('commitReconnect fixes the specified endpoint and updates ids', () => {
+    const a = service.addCardAt(0, 0);
+    const b = service.addCardAt(20, 0);
+    const linkId = service.addLink(a, 'right', b, 'left')!;
+    let ln = service.getSnapshot().links.find(l => l.id === linkId)!;
+    // Reconnect target end on the same target card to a different CP
+    service.commitReconnect(linkId, 'target', b, 'right');
+    ln = service.getSnapshot().links.find(l => l.id === linkId)!;
+    expect(ln.targetCardId).toBe(b);
+    expect(ln.targetPointId).toBe('right');
+    expect(ln.targetAnchor).toBe('fixed');
+    // Reconnect source end to a different CP on source card
+    service.commitReconnect(linkId, 'source', a, 'left');
+    ln = service.getSnapshot().links.find(l => l.id === linkId)!;
+    expect(ln.sourceCardId).toBe(a);
+    expect(ln.sourcePointId).toBe('left');
+    expect(ln.sourceAnchor).toBe('fixed');
+  });
+
+  it('commitReconnect does not allow self-links (both ends on same card)', () => {
+    const a = service.addCardAt(0, 0);
+    const b = service.addCardAt(20, 0);
+    const linkId = service.addLink(a, 'right', b, 'left')!;
+    // Try to move target to the same card as source (would create self-link) → should be ignored
+    service.commitReconnect(linkId, 'target', a, 'left');
+    const ln = service.getSnapshot().links.find(l => l.id === linkId)!;
+    expect(ln.sourceCardId).toBe(a);
+    expect(ln.targetCardId).toBe(b); // unchanged
+  });
 });

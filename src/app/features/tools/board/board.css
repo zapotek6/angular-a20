@@ -31,3 +31,7 @@
 /* Connection points */
 .cp-hot { fill: transparent; cursor: crosshair; pointer-events: all; }
 .cp-dot { fill: #1976d2; stroke: #fff; stroke-width: 0.2; pointer-events: none; }
+
+/* Endpoint reconnection handles */
+.endpoint-hot { fill: transparent; cursor: crosshair; pointer-events: all; }
+.endpoint-handle { fill: #1976d2; stroke: #fff; stroke-width: 0.2; pointer-events: none; }

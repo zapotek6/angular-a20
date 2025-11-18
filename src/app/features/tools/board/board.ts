@@ -2,7 +2,7 @@ import {ChangeDetectionStrategy, Component, ElementRef, HostListener, ViewChild}
 import {CommonModule} from '@angular/common';
 import {BoardStateService} from './services/board-state.service';
 import {BoardState, CardModel, LinkModel, MIN_CARD_SIZE_UNITS, UNIT_TO_PX_AT_100} from './models/board.models';
-import {bezierForEndpoints, bestConnectionPair, buildBezierPathD, cubicPoint, getConnectionPoints, nearestConnectionPoint, toCardAbsoluteUnits} from './services/board-geometry';
+import {bezierForEndpoints, buildBezierPathD, computeEndpoints, cubicPoint, getConnectionPoints, nearestConnectionPoint, toCardAbsoluteUnits} from './services/board-geometry';
 import {map, Observable} from 'rxjs';
 
 @Component({
@@ -31,6 +31,9 @@ export class Board {
   protected hoverTargetCpId: string | null = null;
   protected linkDraft: { sourceCardId: string; sourcePointId: string; from: {x:number;y:number}; to: {x:number;y:number} } | null = null;
   protected hoverNearCp = false; // computed cursor hint
+  protected endpointDrag: { linkId: string; end: 'source'|'target'; fixed: {x:number;y:number; cpId?: string}; to: {x:number;y:number}; hoverCardId?: string|null; hoverCpId?: string|null } | null = null;
+  private endpointMoveListener?: (e: MouseEvent)=>void;
+  private endpointUpListener?: (e: MouseEvent)=>void;
 
   @ViewChild('svgRoot', {static: true}) svgRoot?: ElementRef<SVGSVGElement>;
   @ViewChild('root', {static: true}) root?: ElementRef<HTMLDivElement>;
@@ -124,7 +127,7 @@ export class Board {
   }
 
    onBackgroundPointerDown(ev: MouseEvent) {
-    if (this.linkDraft) return; // suppress while linking
+    if (this.linkDraft || this.endpointDrag) return; // suppress while linking or endpoint editing
     const s = this.board.getSnapshot();
     // Strategy: Space + drag pans; plain drag starts marquee selection
     if (ev.button === 0 && !ev.ctrlKey && !ev.shiftKey && !this.spacePressed) {
@@ -151,6 +154,23 @@ export class Board {
       } else {
         this.hoverTargetCardId = null;
         this.hoverTargetCpId = null;
+      }
+      return;
+    }
+    if (this.endpointDrag) {
+      this.endpointDrag.to = {x: pos.x, y: pos.y};
+      const card = this.getCardAtPoint(s, pos.x, pos.y);
+      if (card) {
+        this.hoverTargetCardId = card.id;
+        const cp = nearestConnectionPoint(card, pos.x, pos.y);
+        this.hoverTargetCpId = cp.id;
+        this.endpointDrag.hoverCardId = card.id;
+        this.endpointDrag.hoverCpId = cp.id;
+      } else {
+        this.hoverTargetCardId = null;
+        this.hoverTargetCpId = null;
+        this.endpointDrag.hoverCardId = null;
+        this.endpointDrag.hoverCpId = null;
       }
       return;
     }
@@ -193,6 +213,19 @@ export class Board {
         this.board.addLink(this.linkDraft.sourceCardId, this.linkDraft.sourcePointId, target.id, cp.id);
       }
       this.linkDraft = null;
+      this.hoverTargetCardId = null;
+      this.hoverTargetCpId = null;
+      return;
+    }
+    if (this.endpointDrag) {
+      // Completing endpoint reconnect via background up should be handled by doc listener, but defensively handle here
+      const drag = this.endpointDrag;
+      const cardId = drag.hoverCardId;
+      const cpId = drag.hoverCpId;
+      if (cardId && cpId) {
+        this.board.commitReconnect(drag.linkId, drag.end, cardId, cpId);
+      }
+      this.endpointDrag = null;
       this.hoverTargetCardId = null;
       this.hoverTargetCpId = null;
       return;
@@ -304,7 +337,11 @@ export class Board {
     const s = this.board.getSnapshot();
     if (ev.code === 'Space') { this.spacePressed = true; ev.preventDefault(); }
     if (ev.key === 'Delete' || ev.key === 'Backspace') { this.board.removeSelected(); ev.preventDefault(); }
-    if (ev.key === 'Escape') { this.marquee = null; this.resizing = null; this.dragging = false; this.linkDraft = null; this.hoverTargetCardId = null; this.hoverTargetCpId = null; this.hoverNearCp = false; this.board.clearSelection(); }
+    if (ev.key === 'Escape') { this.marquee = null; this.resizing = null; this.dragging = false; this.linkDraft = null;
+      // cancel endpoint drag
+      this.endpointDrag = null; this.endpointMoveListener && (document as any).removeEventListener('mousemove', this.endpointMoveListener); this.endpointUpListener && (document as any).removeEventListener('mouseup', this.endpointUpListener);
+      this.endpointMoveListener = undefined; this.endpointUpListener = undefined;
+      this.hoverTargetCardId = null; this.hoverTargetCpId = null; this.hoverNearCp = false; this.board.clearSelection(); }
     const step = 1;
     if (ev.key === 'ArrowLeft') { this.board.nudgeSelected(-step, 0); ev.preventDefault(); }
     if (ev.key === 'ArrowRight') { this.board.nudgeSelected(step, 0); ev.preventDefault(); }
@@ -453,10 +490,10 @@ export class Board {
     const src = s.cards.find(c => c.id === link.sourceCardId);
     const tgt = s.cards.find(c => c.id === link.targetCardId);
     if (!src || !tgt) return null;
-    // Dynamically choose the nearest pair of connection points between the two cards
-    const pair = bestConnectionPair(src, tgt);
-    const A = { p: toCardAbsoluteUnits(src, pair.src), cp: pair.src };
-    const B = { p: toCardAbsoluteUnits(tgt, pair.tgt), cp: pair.tgt };
+    // Resolve endpoints honoring anchors (fixed/dynamic)
+    const endpoints = computeEndpoints(link, src, tgt);
+    const A = { p: endpoints.srcPt, cp: endpoints.srcCp };
+    const B = { p: endpoints.tgtPt, cp: endpoints.tgtCp };
     const {p0, p1, p2, p3} = bezierForEndpoints(A, B);
     return buildBezierPathD(p0, p1, p2, p3);
   }
@@ -496,11 +533,92 @@ export class Board {
     const src = s.cards.find(c => c.id === ln.sourceCardId);
     const tgt = s.cards.find(c => c.id === ln.targetCardId);
     if (!src || !tgt) return null;
-    const pair = bestConnectionPair(src, tgt);
-    const A = { p: toCardAbsoluteUnits(src, pair.src), cp: pair.src };
-    const B = { p: toCardAbsoluteUnits(tgt, pair.tgt), cp: pair.tgt };
+    const endpoints = computeEndpoints(ln, src, tgt);
+    const A = { p: endpoints.srcPt, cp: endpoints.srcCp };
+    const B = { p: endpoints.tgtPt, cp: endpoints.tgtCp };
     const {p0, p1, p2, p3} = bezierForEndpoints(A, B);
     const t = ln.label?.t ?? 0.5;
     return cubicPoint(p0, p1, p2, p3, t);
+  }
+
+  // Endpoint handles helpers
+  getLinkEndpoints(s: BoardState, ln: LinkModel): {src:{x:number;y:number;cpId:string}, tgt:{x:number;y:number;cpId:string}} | null {
+    const src = s.cards.find(c => c.id === ln.sourceCardId);
+    const tgt = s.cards.find(c => c.id === ln.targetCardId);
+    if (!src || !tgt) return null;
+    const e = computeEndpoints(ln, src, tgt);
+    return { src: {x: e.srcPt.x, y: e.srcPt.y, cpId: e.srcCp.id}, tgt: {x: e.tgtPt.x, y: e.tgtPt.y, cpId: e.tgtCp.id} };
+  }
+
+  getSingleSelectedLink(s: BoardState): LinkModel | null {
+    const ids = s.selectedLinkIds || [];
+    if (ids.length !== 1) return null;
+    const id = ids[0];
+    return s.links.find(l => l.id === id) ?? null;
+  }
+
+  getEndpointDraftPathD(s: BoardState): { d: string } | null {
+    if (!this.endpointDrag) return null;
+    const ln = s.links.find(l => l.id === this.endpointDrag!.linkId);
+    if (!ln) return null;
+    const src = s.cards.find(c => c.id === ln.sourceCardId);
+    const tgt = s.cards.find(c => c.id === ln.targetCardId);
+    if (!src || !tgt) return null;
+    const e = computeEndpoints(ln, src, tgt);
+    // Fixed side (non-dragging end)
+    const fixed = this.endpointDrag.end === 'source' ? { p: e.tgtPt, cp: e.tgtCp } : { p: e.srcPt, cp: e.srcCp };
+    // Moving side: current mouse pos; synthesize a CP direction based on vector
+    const to = this.endpointDrag.to;
+    const dx = to.x - fixed.p.x; const dy = to.y - fixed.p.y;
+    const isHoriz = Math.abs(dx) > Math.abs(dy);
+    const movingCp = { id: 'tmp', relX: isHoriz ? (dx > 0 ? 1 : 0) : 0.5, relY: isHoriz ? 0.5 : (dy > 0 ? 1 : 0), shape: 'circle' as const };
+    const A = this.endpointDrag.end === 'source' ? { p: to, cp: movingCp } : fixed;
+    const B = this.endpointDrag.end === 'source' ? fixed : { p: to, cp: movingCp };
+    const {p0, p1, p2, p3} = bezierForEndpoints(A, B);
+    const d = buildBezierPathD(p0, p1, p2, p3);
+    return { d };
+  }
+
+  onEndpointHandleDown(ev: MouseEvent, ln: LinkModel, end: 'source'|'target') {
+    ev.stopPropagation();
+    const s = this.board.getSnapshot();
+    const src = s.cards.find(c => c.id === ln.sourceCardId);
+    const tgt = s.cards.find(c => c.id === ln.targetCardId);
+    if (!src || !tgt) return;
+    const e = computeEndpoints(ln, src, tgt);
+    const fixedPt = end === 'source' ? e.tgtPt : e.srcPt;
+    const dragStart = end === 'source' ? e.srcPt : e.tgtPt;
+    this.endpointDrag = { linkId: ln.id, end, fixed: {x: fixedPt.x, y: fixedPt.y}, to: {x: dragStart.x, y: dragStart.y}, hoverCardId: null, hoverCpId: null };
+    // listeners
+    this.endpointMoveListener = (moveEv: MouseEvent) => {
+      const s2 = this.board.getSnapshot();
+      const pos = this.screenToBoard(moveEv, s2);
+      if (!this.endpointDrag) return;
+      this.endpointDrag.to = {x: pos.x, y: pos.y};
+      const card = this.getCardAtPoint(s2, pos.x, pos.y);
+      if (card) {
+        const cp = nearestConnectionPoint(card, pos.x, pos.y);
+        this.endpointDrag.hoverCardId = card.id; this.endpointDrag.hoverCpId = cp.id;
+        this.hoverTargetCardId = card.id; this.hoverTargetCpId = cp.id;
+      } else {
+        this.endpointDrag.hoverCardId = null; this.endpointDrag.hoverCpId = null;
+        this.hoverTargetCardId = null; this.hoverTargetCpId = null;
+      }
+    };
+    this.endpointUpListener = (upEv: MouseEvent) => {
+      (document as any).removeEventListener('mousemove', this.endpointMoveListener as any);
+      (document as any).removeEventListener('mouseup', this.endpointUpListener as any);
+      const drag = this.endpointDrag;
+      this.endpointDrag = null;
+      if (!drag) return;
+      const cardId = drag.hoverCardId; const cpId = drag.hoverCpId;
+      if (cardId && cpId) {
+        this.board.commitReconnect(drag.linkId, drag.end, cardId, cpId);
+      }
+      this.hoverTargetCardId = null; this.hoverTargetCpId = null;
+      this.endpointMoveListener = undefined; this.endpointUpListener = undefined;
+    };
+    (document as any).addEventListener('mousemove', this.endpointMoveListener);
+    (document as any).addEventListener('mouseup', this.endpointUpListener, {once: true});
   }
 }
