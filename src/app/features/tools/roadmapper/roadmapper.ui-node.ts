@@ -1,3 +1,4 @@
+/*
 import {NodeModel, StyleContext} from './roadmapper.models';
 import {getEmInPxFromParent, getRemInPx} from './roadmapper.ui-utils';
 
@@ -52,3 +53,4 @@ this.setupCtxMenuForNode(g, n);
 export function drawNode(n:NodeModel) {
   let node = drawDefaultNode(n)
 }
+*/

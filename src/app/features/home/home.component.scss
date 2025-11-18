@@ -40,14 +40,15 @@
   width: 80px;
  }
 
+
 /* Regions */
-.topbar{ grid-area: top; display:flex; align-items:center; padding:0 12px; border-bottom:1px solid var(--line); background: var(--color-bg-elevated)}
-.bottombar{ grid-area: bottom; display:flex; align-items:center; padding:0 12px; border-top:1px solid var(--line); }
+.topbar{ height: 2rem; grid-area: top; display:flex; align-items:center; padding:0 12px; border-bottom:1px solid var(--line); background: var(--color-bg-elevated)}
+.bottombar{ height: 2rem; grid-area: bottom; display:flex; align-items:center; padding:0 12px; border-top:1px solid var(--line); }
 
 .sidebar-left{ grid-area: left; border-right:1px solid var(--line); overflow:auto; }
 .sidebar-right{ grid-area: right; border-left:1px solid var(--line); overflow:auto; }
 
-.workspace{ grid-area: main; overflow:auto; }
+.workspace{ height: 100%; grid-area: main; overflow:auto;}
 
 /* Auto-hide (collapse) helpers */
 .app-layout.hide-left { --left-w: 0px; }

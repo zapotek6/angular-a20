@@ -26,7 +26,6 @@
       <!--[loading]="!ready"
       [disabled]="projectForm.pristine"-->
     </div>
-
     <!--<select [(ngModel)]="curr_project_uuid" (change)="onProjectChange($event)">
       &lt;!&ndash;      <option [ngValue]="null" disabled>Select a project</option>&ndash;&gt;
       <option value="test">Test</option>
@@ -51,6 +50,9 @@
     <div [hidden]="activeTool !== AvailableTools.ROADMAPPER">
       <app-roadmapper></app-roadmapper>
     </div>
+    <div [hidden]="activeTool !== AvailableTools.BOARD" style="height: 100%;">
+      <app-board></app-board>
+    </div>
     <div [hidden]="activeTool !== AvailableTools.DUMMY">
       <app-feature-matrix></app-feature-matrix>
       <!--<div class="ag-theme-alpine" style="height: 60vh; width: 100%;">
@@ -70,6 +72,9 @@
     <app-domain-tree></app-domain-tree>
     <div [hidden]="activeTool !== AvailableTools.ROADMAPPER">
       <app-pmo-detail></app-pmo-detail>
+    </div>
+    <div [hidden]="activeTool !== AvailableTools.BOARD">
+      <app-board-properties></app-board-properties>
     </div>
   </aside>
 

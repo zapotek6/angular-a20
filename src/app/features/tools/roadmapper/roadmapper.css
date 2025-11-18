@@ -2,6 +2,10 @@ svg {
   background-color: rgba(255, 246, 228, 0.45);
 }
 
+.toggle {
+  fill: white;
+}
+
 .pmo {
   line-height: 1.2rem;
   font-size: var(--font-size-sm);
@@ -20,6 +24,10 @@ svg {
 
 .pmo .ts {
   fill: var(--color-pmo-ts);
+}
+
+.pmo .rk {
+  fill: var(--color-pmo-rk);
 }
 
 .pmo .us {

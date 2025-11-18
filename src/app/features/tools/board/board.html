@@ -1,0 +1,144 @@
+<div class="board-root" tabindex="0" #root (mousedown)="focusRoot()">
+  <div class="board-toolbar">
+    <button type="button" (click)="addCard()">Add card</button>
+    <span class="spacer"></span>
+    <button type="button" (click)="zoomOut()">-</button>
+    <button type="button" (click)="resetZoom()">100%</button>
+    <button type="button" (click)="zoomIn()">+</button>
+    <span class="spacer"></span>
+    <button type="button" (click)="deleteSelection()">Delete</button>
+  </div>
+
+  <svg #svgRoot class="board-canvas" [style.cursor]="hoverNearCp ? 'crosshair' : 'default'"
+       (wheel)="onWheel($event)"
+       (mousedown)="onBackgroundPointerDown($event)"
+       (mousemove)="onBackgroundPointerMove($event)"
+       (mouseup)="onBackgroundPointerUp($event)">
+    <!-- Background to capture events -->
+    <rect x="0" y="0" width="100%" height="100%" fill="#fafafa"></rect>
+
+
+    @if (state$ | async; as s) {
+      <!-- Two-level transform: outer translates in screen px; inner scales units to px and zooms. -->
+      <g [attr.transform]="'translate(' + s.viewport.offsetX + ',' + s.viewport.offsetY + ')'"><!-- px pan -->
+        <g [attr.transform]="'scale(' + s.viewport.zoom + ') scale(' + 10 + ')'"><!-- zoom and units->px -->
+
+        <!-- Markers for arrows -->
+        <defs>
+          <marker id="arrow-head-filled" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="3" markerHeight="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="context-stroke" stroke="context-stroke"></path>
+          </marker>
+          <marker id="arrow-head-open" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="3" markerHeight="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="none" stroke="context-stroke"></path>
+          </marker>
+          <marker id="arrow-tail-filled" viewBox="0 0 10 10" refX="0" refY="5" markerWidth="3" markerHeight="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M 10 0 L 0 5 L 10 10 z" fill="context-stroke" stroke="context-stroke"></path>
+          </marker>
+          <marker id="arrow-tail-open" viewBox="0 0 10 10" refX="0" refY="5" markerWidth="3" markerHeight="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M 10 0 L 0 5 L 10 10 z" fill="none" stroke="context-stroke"></path>
+          </marker>
+        </defs>
+
+        <!-- Links layer (render before cards) -->
+        <g class="links">
+          @for (ln of s.links; track ln.id) {
+            @let d = getLinkPathD(s, ln);
+            @if (d) {
+              <path class="link-path {{ ln.style.dash }}" [attr.d]="d" [attr.stroke]="ln.style.color" [attr.stroke-width]="ln.style.width"
+                    [attr.marker-end]="markerEnd(ln)" [attr.marker-start]="markerStart(ln)"></path>
+              @if (ln.label?.text) {
+                @let pos = getLinkLabelPos(s, ln);
+                @if (pos) {
+                  <text class="link-label" [attr.x]="pos.x" [attr.y]="pos.y">{{ ln.label?.text }}</text>
+                }
+              }
+            }
+          }
+          <!-- Draft link while dragging from a connection point -->
+          @if (linkDraft) {
+            @let draft = getDraftPathD(s);
+            @if (draft) {
+              <path class="link-path dashed" [attr.d]="draft.d" stroke="#546e7a" stroke-width="0.5" opacity="0.6"></path>
+            }
+          }
+        </g>
+
+        <!-- Cards -->
+        @for (c of s.cards; track c.id) {
+          <g class="card"
+             [attr.transform]="'translate(' + c.x + ',' + c.y + ')'"><!-- units -->
+            <rect class="card-rect" [class.selected]="s.selectedCardIds.includes(c.id)" [attr.width]="c.width" [attr.height]="c.height" [attr.fill]="c.color"
+                  (mousedown)="onCardPointerDown($event, c)"></rect>
+            <!-- Title text -->
+            <text x="8" y="18" class="card-title">{{ c.title }}</text>
+            <!-- Body text (simple single-line in v1) -->
+            <text x="8" y="36" class="card-body">{{ c.body }}</text>
+          </g>
+        }
+
+        <!-- Connection points overlay: show on hovered cards or when linking involves the card -->
+        @for (c of s.cards; track c.id) {
+          @if (hoverCardId === c.id || hoverTargetCardId === c.id || (linkDraft && linkDraft.sourceCardId === c.id)) {
+            @for (cp of cps(c); track cp.id) {
+              @let cx = c.x + cp.relX * c.width;
+              @let cy = c.y + cp.relY * c.height;
+              <!-- Larger hot area for easy grabbing -->
+              <circle class="cp-hot" [attr.cx]="cx" [attr.cy]="cy" [attr.r]="cp.hotRadius || 1.2"
+                      (mousedown)="startLinkFrom($event, c, cp.id)"></circle>
+              <!-- Visible indicator -->
+              <circle class="cp-dot" [attr.cx]="cx" [attr.cy]="cy" [attr.r]="(hoverTargetCardId === c.id && hoverTargetCpId === cp.id) ? 0.6 : 0.4"></circle>
+            }
+          }
+        }
+
+        <!-- Selection visuals for single selection -->
+        @if (s.selectedCardIds.length === 1) {
+          @let sel = getSingleSelected(s);
+          @if (sel) {
+            <g class="selection" [attr.transform]="'translate(' + (sel.x - selectionPaddingUnits) + ',' + (sel.y - selectionPaddingUnits) + ')'"><!-- units with padding -->
+              <rect class="selection-rect" [attr.width]="sel.width + 2*selectionPaddingUnits" [attr.height]="sel.height + 2*selectionPaddingUnits"></rect>
+              <!-- 8 handles: n, s, e, w, ne, nw, se, sw -->
+              <rect class="handle" [attr.x]="sel.width/2 - 0.5" [attr.y]="-1.5 - selectionPaddingUnits" width="1" height="1"
+                    (mousedown)="startResize($event, sel, 'n')"></rect>
+              <rect class="handle" [attr.x]="sel.width/2 - 0.5" [attr.y]="sel.height + 0.5 + selectionPaddingUnits" width="1" height="1"
+                    (mousedown)="startResize($event, sel, 's')"></rect>
+              <rect class="handle" [attr.x]="-1.5 - selectionPaddingUnits" [attr.y]="sel.height/2 - 0.5" width="1" height="1"
+                    (mousedown)="startResize($event, sel, 'w')"></rect>
+              <rect class="handle" [attr.x]="sel.width + 0.5 + selectionPaddingUnits" [attr.y]="sel.height/2 - 0.5" width="1" height="1"
+                    (mousedown)="startResize($event, sel, 'e')"></rect>
+              <rect class="handle" [attr.x]="-1.5 - selectionPaddingUnits" [attr.y]="-1.5 - selectionPaddingUnits" width="1" height="1"
+                    (mousedown)="startResize($event, sel, 'nw')"></rect>
+              <rect class="handle" [attr.x]="sel.width + 0.5 + selectionPaddingUnits" [attr.y]="-1.5 - selectionPaddingUnits" width="1" height="1"
+                    (mousedown)="startResize($event, sel, 'ne')"></rect>
+              <rect class="handle" [attr.x]="-1.5 - selectionPaddingUnits" [attr.y]="sel.height + 0.5 + selectionPaddingUnits" width="1" height="1"
+                    (mousedown)="startResize($event, sel, 'sw')"></rect>
+              <rect class="handle" [attr.x]="sel.width + 0.5 + selectionPaddingUnits" [attr.y]="sel.height + 0.5 + selectionPaddingUnits" width="1" height="1"
+                    (mousedown)="startResize($event, sel, 'se')"></rect>
+            </g>
+          }
+        }
+
+        <!-- Multi-selection bounding box (optional visual cue) -->
+        @if (s.selectedCardIds.length > 1) {
+          @let b = getSelectionBounds(s);
+          @if (b) {
+            <g class="selection" [attr.transform]="'translate(' + (b.x - selectionPaddingUnits) + ',' + (b.y - selectionPaddingUnits) + ')'"><!-- units with padding -->
+              <rect class="multi-select-rect" [attr.width]="b.w + 2*selectionPaddingUnits" [attr.height]="b.h + 2*selectionPaddingUnits"></rect>
+            </g>
+          }
+        }
+
+        <!-- Marquee selection rectangle in units -->
+        @if (marquee) {
+          @let x0 = Math.min(marquee.x0, marquee.x1);
+          @let y0 = Math.min(marquee.y0, marquee.y1);
+          @let w = Math.abs(marquee.x1 - marquee.x0);
+          @let h = Math.abs(marquee.y1 - marquee.y0);
+          <rect class="marquee" [attr.x]="x0" [attr.y]="y0" [attr.width]="w" [attr.height]="h"></rect>
+        }
+
+        </g>
+      </g>
+    }
+  </svg>
+</div>

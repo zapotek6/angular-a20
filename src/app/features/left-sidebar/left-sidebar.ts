@@ -5,7 +5,8 @@ import {LoggerService} from '../../core/logger/logger.service';
 import {WorkspaceService} from '../../core/workspace/workspace.service';
 import {NgOptimizedImage} from '@angular/common';
 
-export enum AvailableTools { LISTER = 'TOOL-ACTIVATE-LISTER', ROADMAPPER = 'TOOL-ACTIVATE-ROADMAPPER', DUMMY = 'TOOL-ACTIVATE-DUMMY'}
+export enum AvailableTools { LISTER = 'TOOL-ACTIVATE-LISTER', ROADMAPPER = 'TOOL-ACTIVATE-ROADMAPPER', BOARD = 'TOOL-ACTIVATE-BOARD', DUMMY = 'TOOL-ACTIVATE-DUMMY'}
+
 
 @Component({
   selector: 'app-left-sidebar',

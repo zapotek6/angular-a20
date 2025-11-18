@@ -17,6 +17,9 @@ import {Select, SelectChangeEvent} from 'primeng/select';
 import {PmoDetail} from '../tools/roadmapper/pmo-detail/pmo-detail';
 import {DomainTreeComponent} from './domain-tree/domain-tree.component';
 import {FeatureMatrix} from '../tools/feature-matrix/feature-matrix';
+import {Board} from '../tools/board/board';
+import {BoardPropertiesComponent} from '../tools/board/components/board-properties.component';
+
 
 @Component({
   standalone: true,
@@ -33,6 +36,8 @@ import {FeatureMatrix} from '../tools/feature-matrix/feature-matrix';
     PmoDetail,
     DomainTreeComponent,
     FeatureMatrix
+    , Board
+    , BoardPropertiesComponent
   ],
   templateUrl: './home.component.html',
   styleUrl: './home.component.scss',
@@ -83,6 +88,9 @@ export class HomeComponent implements OnInit, OnDestroy {
       }
       if (message?.type === AvailableTools.ROADMAPPER) {
         this.activeTool = AvailableTools.ROADMAPPER;
+      }
+      if (message?.type === AvailableTools.BOARD) {
+        this.activeTool = AvailableTools.BOARD;
       }
       if (message?.type === AvailableTools.DUMMY) {
         this.activeTool = AvailableTools.DUMMY;
