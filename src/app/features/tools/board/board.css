@@ -45,9 +45,9 @@
 .link-path.selected { stroke: #1976d2 !important; stroke-width: 0.7; filter: drop-shadow(0 0 0.3px #1976d2); }
 
 /* Connection points */
-.cp-hot { fill: transparent; cursor: crosshair; pointer-events: all; }
+.cp-hot { fill: transparent; cursor: grab; pointer-events: all; }
 .cp-dot { fill: #1976d2; stroke: #fff; stroke-width: 0.2; pointer-events: none; }
 
 /* Endpoint reconnection handles */
-.endpoint-hot { fill: transparent; cursor: crosshair; pointer-events: all; }
+.endpoint-hot { fill: transparent; cursor: grab; pointer-events: all; }
 .endpoint-handle { fill: #1976d2; stroke: #fff; stroke-width: 0.2; pointer-events: none; }

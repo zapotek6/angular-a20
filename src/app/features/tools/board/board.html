@@ -69,23 +69,6 @@
               }
             }
           }
-          <!-- Endpoint handles when a single link is selected -->
-          @if (s.selectedLinkIds?.length === 1) {
-            @let ln = getSingleSelectedLink(s);
-            @if (ln) {
-              @let ep = getLinkEndpoints(s, ln);
-              @if (ep) {
-                <!-- Source endpoint -->
-                <circle class="endpoint-hot" [attr.cx]="ep.src.x" [attr.cy]="ep.src.y" [attr.r]="1.2"
-                        (mousedown)="onEndpointHandleDown($event, ln, 'source')"></circle>
-                <circle class="endpoint-handle" [attr.cx]="ep.src.x" [attr.cy]="ep.src.y" [attr.r]="0.6"></circle>
-                <!-- Target endpoint -->
-                <circle class="endpoint-hot" [attr.cx]="ep.tgt.x" [attr.cy]="ep.tgt.y" [attr.r]="1.2"
-                        (mousedown)="onEndpointHandleDown($event, ln, 'target')"></circle>
-                <circle class="endpoint-handle" [attr.cx]="ep.tgt.x" [attr.cy]="ep.tgt.y" [attr.r]="0.6"></circle>
-              }
-            }
-          }
           <!-- Draft link while dragging from a connection point -->
           @if (linkDraft) {
             @let draft = getDraftPathD(s);
@@ -125,11 +108,15 @@
             @for (cp of cps(c); track cp.id) {
               @let cx = c.x + cp.relX * c.width;
               @let cy = c.y + cp.relY * c.height;
-              <!-- Larger hot area for easy grabbing -->
-              <circle class="cp-hot" [attr.cx]="cx" [attr.cy]="cy" [attr.r]="cp.hotRadius || 1.2"
-                      (mousedown)="startLinkFrom($event, c, cp.id)"></circle>
-              <!-- Visible indicator -->
-              <circle class="cp-dot" [attr.cx]="cx" [attr.cy]="cy" [attr.r]="(hoverTargetCardId === c.id && hoverTargetCpId === cp.id) ? 0.6 : 0.4"></circle>
+              @if (!shouldSuppressCp(s, c.id, cp.id)) {
+                <!-- Larger hot area for easy grabbing (disabled while reconnecting an endpoint) -->
+                @if (!endpointDrag) {
+                  <circle class="cp-hot" [attr.cx]="cx" [attr.cy]="cy" [attr.r]="cp.hotRadius || 1.2"
+                          (mousedown)="startLinkFrom($event, c, cp.id)"></circle>
+                }
+                <!-- Visible indicator -->
+                <circle class="cp-dot" [attr.cx]="cx" [attr.cy]="cy" [attr.r]="(hoverTargetCardId === c.id && hoverTargetCpId === cp.id) ? 0.6 : 0.4"></circle>
+              }
             }
           }
         }
@@ -179,6 +166,26 @@
           @let h = Math.abs(marquee.y1 - marquee.y0);
           <rect class="marquee" [attr.x]="x0" [attr.y]="y0" [attr.width]="w" [attr.height]="h"></rect>
         }
+
+        <!-- Endpoint handles overlay (rendered last to ensure visibility above cards) -->
+        <g class="link-endpoint-overlays">
+          @if (s.selectedLinkIds?.length === 1) {
+            @let ln = getSingleSelectedLink(s);
+            @if (ln) {
+              @let ep = getLinkEndpoints(s, ln);
+              @if (ep) {
+                <!-- Source endpoint -->
+                <circle class="endpoint-hot" [attr.cx]="ep.src.x" [attr.cy]="ep.src.y" [attr.r]="1.2"
+                        (mousedown)="onEndpointHandleDown($event, ln, 'source')"></circle>
+                <circle class="endpoint-handle" [attr.cx]="ep.src.x" [attr.cy]="ep.src.y" [attr.r]="0.6"></circle>
+                <!-- Target endpoint -->
+                <circle class="endpoint-hot" [attr.cx]="ep.tgt.x" [attr.cy]="ep.tgt.y" [attr.r]="1.2"
+                        (mousedown)="onEndpointHandleDown($event, ln, 'target')"></circle>
+                <circle class="endpoint-handle" [attr.cx]="ep.tgt.x" [attr.cy]="ep.tgt.y" [attr.r]="0.6"></circle>
+              }
+            }
+          }
+        </g>
 
         </g>
       </g>

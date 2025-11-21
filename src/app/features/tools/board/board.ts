@@ -36,6 +36,9 @@ export class Board {
   private endpointMoveListener?: (e: MouseEvent)=>void;
   private endpointUpListener?: (e: MouseEvent)=>void;
 
+  // Unified interaction mode to serialize gestures
+  private interactionMode: 'idle' | 'marquee' | 'pan' | 'drag-card' | 'resize-card' | 'create-link' | 'reconnect-endpoint' = 'idle';
+
   @ViewChild('svgRoot', {static: true}) svgRoot?: ElementRef<SVGSVGElement>;
   @ViewChild('root', {static: true}) root?: ElementRef<HTMLDivElement>;
 
@@ -128,7 +131,7 @@ export class Board {
   }
 
    onBackgroundPointerDown(ev: MouseEvent) {
-    if (this.linkDraft || this.endpointDrag) return; // suppress while linking or endpoint editing
+    if (this.interactionMode !== 'idle') return; // suppress while any interaction active
     const s = this.board.getSnapshot();
     // Strategy: Space + drag pans; plain drag starts marquee selection
     if (ev.button === 0 && !ev.ctrlKey && !ev.shiftKey && !this.spacePressed) {
@@ -136,8 +139,10 @@ export class Board {
       this.board.clearSelection();
       const {x, y} = this.screenToBoard(ev, s);
       this.marquee = {x0: x, y0: y, x1: x, y1: y};
+      this.interactionMode = 'marquee';
     } else if (ev.button === 0 && this.spacePressed) {
       this.pan = {startX: ev.clientX, startY: ev.clientY, startOffsetX: s.viewport.offsetX, startOffsetY: s.viewport.offsetY};
+      this.interactionMode = 'pan';
     }
   }
 
@@ -205,32 +210,6 @@ export class Board {
 
   onBackgroundPointerUp(ev: MouseEvent) {
     const s = this.board.getSnapshot();
-    if (this.linkDraft) {
-      // Complete or cancel link
-      const {x, y} = this.screenToBoard(ev, s);
-      const target = this.getCardAtPoint(s, x, y);
-      if (target && target.id !== this.linkDraft.sourceCardId) {
-        const cp = nearestConnectionPoint(target, x, y);
-        this.board.addLink(this.linkDraft.sourceCardId, this.linkDraft.sourcePointId, target.id, cp.id);
-      }
-      this.linkDraft = null;
-      this.hoverTargetCardId = null;
-      this.hoverTargetCpId = null;
-      return;
-    }
-    if (this.endpointDrag) {
-      // Completing endpoint reconnect via background up should be handled by doc listener, but defensively handle here
-      const drag = this.endpointDrag;
-      const cardId = drag.hoverCardId;
-      const cpId = drag.hoverCpId;
-      if (cardId && cpId) {
-        this.board.commitReconnect(drag.linkId, drag.end, cardId, cpId);
-      }
-      this.endpointDrag = null;
-      this.hoverTargetCardId = null;
-      this.hoverTargetCpId = null;
-      return;
-    }
     if (this.marquee) {
       const x0 = Math.min(this.marquee.x0, this.marquee.x1);
       const y0 = Math.min(this.marquee.y0, this.marquee.y1);
@@ -241,6 +220,7 @@ export class Board {
     }
     this.marquee = null;
     this.pan = null;
+    this.interactionMode = 'idle';
     // Refresh hover after interactions end
     const pos = this.screenToBoard(ev, s);
     this.updateHoverState(s, pos.x, pos.y);
@@ -257,6 +237,7 @@ export class Board {
     }
     // Start dragging
     this.dragging = true;
+    this.interactionMode = 'drag-card';
     (document as any).addEventListener('mousemove', this.boundOnDragMove);
     (document as any).addEventListener('mouseup', this.boundOnDragEnd, {once: true});
     this.dragStart = {sx: ev.clientX, sy: ev.clientY};
@@ -280,6 +261,7 @@ export class Board {
   private onDragEnd(ev: MouseEvent) {
     this.dragging = false;
     this.dragStart = null;
+    this.interactionMode = 'idle';
     (document as any).removeEventListener('mousemove', this.boundOnDragMove);
   }
 
@@ -299,6 +281,7 @@ export class Board {
       startMouseY: ev.clientY,
       keepRatio: ev.shiftKey
     };
+    this.interactionMode = 'resize-card';
     (document as any).addEventListener('mousemove', this.boundOnResizeMove);
     (document as any).addEventListener('mouseup', this.boundOnResizeEnd, {once: true});
   }
@@ -329,6 +312,7 @@ export class Board {
   }
   private onResizeEnd(ev: MouseEvent) {
     this.resizing = null;
+    this.interactionMode = 'idle';
     (document as any).removeEventListener('mousemove', this.boundOnResizeMove);
   }
 
@@ -342,7 +326,7 @@ export class Board {
       // cancel endpoint drag
       this.endpointDrag = null; this.endpointMoveListener && (document as any).removeEventListener('mousemove', this.endpointMoveListener); this.endpointUpListener && (document as any).removeEventListener('mouseup', this.endpointUpListener);
       this.endpointMoveListener = undefined; this.endpointUpListener = undefined;
-      this.hoverTargetCardId = null; this.hoverTargetCpId = null; this.hoverNearCp = false; this.board.clearSelection(); }
+      this.hoverTargetCardId = null; this.hoverTargetCpId = null; this.hoverNearCp = false; this.board.clearSelection(); this.interactionMode = 'idle'; }
     const step = 1;
     if (ev.key === 'ArrowLeft') { this.board.nudgeSelected(-step, 0); ev.preventDefault(); }
     if (ev.key === 'ArrowRight') { this.board.nudgeSelected(step, 0); ev.preventDefault(); }
@@ -395,12 +379,15 @@ export class Board {
     let bestD2 = Infinity;
     if (card) {
       const cp = nearestConnectionPoint(card, x, y);
-      const p = toCardAbsoluteUnits(card, cp);
-      const dx = p.x - x, dy = p.y - y;
-      const d2 = dx*dx + dy*dy;
-      const r = (cp.hotRadius ?? 1.2);
-      if (d2 <= r*r) {
-        nearCp = true; nearCardId = card.id; nearCpId = cp.id; bestD2 = d2;
+      // Suppress hover if this CP coincides with selected link endpoint handle
+      if (!this.shouldSuppressCp(s, card.id, cp.id)) {
+        const p = toCardAbsoluteUnits(card, cp);
+        const dx = p.x - x, dy = p.y - y;
+        const d2 = dx*dx + dy*dy;
+        const r = (cp.hotRadius ?? 1.2);
+        if (d2 <= r*r) {
+          nearCp = true; nearCardId = card.id; nearCpId = cp.id; bestD2 = d2;
+        }
       }
     }
     // If not inside a card or not near a CP yet, search all cards' CP hot areas
@@ -408,6 +395,7 @@ export class Board {
       for (const c of s.cards) {
         const cps = getConnectionPoints(c);
         for (const cp of cps) {
+          if (this.shouldSuppressCp(s, c.id, cp.id)) continue;
           const p = toCardAbsoluteUnits(c, cp);
           const dx = p.x - x, dy = p.y - y;
           const d2 = dx*dx + dy*dy;
@@ -430,12 +418,31 @@ export class Board {
     this.hoverNearCp = nearCp;
   }
 
+  // Return true if the given card connection point should be hidden/disabled
+  // because it coincides with the currently selected link's endpoint handle.
+  shouldSuppressCp(s: BoardState, cardId: string, cpId: string): boolean {
+    const ids = s.selectedLinkIds || [];
+    if (ids.length !== 1) return false;
+    const ln = s.links.find(l => l.id === ids[0]);
+    if (!ln) return false;
+    const src = s.cards.find(c => c.id === ln.sourceCardId);
+    const tgt = s.cards.find(c => c.id === ln.targetCardId);
+    if (!src || !tgt) return false;
+    const e = computeEndpoints(ln, src, tgt);
+    if (cardId === src.id && cpId === e.srcCp.id) return true;
+    if (cardId === tgt.id && cpId === e.tgtCp.id) return true;
+    return false;
+  }
+
   startLinkFrom(ev: MouseEvent, card: CardModel, cpId: string) {
     ev.stopPropagation();
+    // Only allow starting a new link in idle mode, not during endpoint reconnection or other gestures
+    if (this.interactionMode !== 'idle') return;
     const cps = getConnectionPoints(card);
     const cp = cps.find(c => c.id === cpId) || cps[0];
     const from = toCardAbsoluteUnits(card, cp);
     this.linkDraft = { sourceCardId: card.id, sourcePointId: cp.id, from, to: {...from} };
+    this.interactionMode = 'create-link';
     // Track mouse move/up globally
     const move = (e: MouseEvent) => {
       const s = this.board.getSnapshot();
@@ -459,7 +466,7 @@ export class Board {
         const cp2 = nearestConnectionPoint(target, pos.x, pos.y);
         this.board.addLink(card.id, cp.id, target.id, cp2.id);
       }
-      this.linkDraft = null; this.hoverTargetCardId = null; this.hoverTargetCpId = null;
+      this.linkDraft = null; this.hoverTargetCardId = null; this.hoverTargetCpId = null; this.interactionMode = 'idle';
     };
     (document as any).addEventListener('mousemove', move);
     (document as any).addEventListener('mouseup', up, {once: true});
@@ -582,6 +589,10 @@ export class Board {
 
   onEndpointHandleDown(ev: MouseEvent, ln: LinkModel, end: 'source'|'target') {
     ev.stopPropagation();
+    ev.preventDefault();
+    // Ensure no residual link drafting remains while editing an endpoint
+    this.linkDraft = null;
+    if (this.interactionMode !== 'idle') return;
     const s = this.board.getSnapshot();
     const src = s.cards.find(c => c.id === ln.sourceCardId);
     const tgt = s.cards.find(c => c.id === ln.targetCardId);
@@ -590,6 +601,7 @@ export class Board {
     const fixedPt = end === 'source' ? e.tgtPt : e.srcPt;
     const dragStart = end === 'source' ? e.srcPt : e.tgtPt;
     this.endpointDrag = { linkId: ln.id, end, fixed: {x: fixedPt.x, y: fixedPt.y}, to: {x: dragStart.x, y: dragStart.y}, hoverCardId: null, hoverCpId: null };
+    this.interactionMode = 'reconnect-endpoint';
     // listeners
     this.endpointMoveListener = (moveEv: MouseEvent) => {
       const s2 = this.board.getSnapshot();
@@ -617,6 +629,7 @@ export class Board {
         this.board.commitReconnect(drag.linkId, drag.end, cardId, cpId);
       }
       this.hoverTargetCardId = null; this.hoverTargetCpId = null;
+      this.interactionMode = 'idle';
       this.endpointMoveListener = undefined; this.endpointUpListener = undefined;
     };
     (document as any).addEventListener('mousemove', this.endpointMoveListener);
