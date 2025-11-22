@@ -89,15 +89,28 @@
         @for (c of s.cards; track c.id) {
           <g class="card"
              [attr.transform]="'translate(' + c.x + ',' + c.y + ')'"><!-- units -->
-            <rect class="card-rect" [class.selected]="s.selectedCardIds.includes(c.id)" [attr.width]="c.width" [attr.height]="c.height" [attr.fill]="c.color"
+            <rect class="card-rect" [class.selected]="s.selectedCardIds.includes(c.id)"
+                  [attr.width]="c.width" [attr.height]="c.height" [attr.fill]="c.color"
+                  [attr.rx]="clampCornerRadius(c)" [attr.ry]="clampCornerRadius(c)"
                   (mousedown)="onCardPointerDown($event, c)"></rect>
             <!-- Centered, wrapped title inside card using foreignObject -->
+            @let pad = (c.titleStyle?.paddingUnits ?? titlePaddingUnits);
             <foreignObject class="card-title-fo"
-                           [attr.x]="titlePaddingUnits"
-                           [attr.y]="titlePaddingUnits"
-                           [attr.width]="Math.max(0, c.width - 2*titlePaddingUnits)"
-                           [attr.height]="Math.max(0, c.height - 2*titlePaddingUnits)">
-              <div xmlns="http://www.w3.org/1999/xhtml" class="card-title-box">{{ c.title }}</div>
+                           [attr.x]="pad"
+                           [attr.y]="pad"
+                           [attr.width]="Math.max(0, c.width - 2*pad)"
+                           [attr.height]="Math.max(0, c.height - 2*pad)">
+              <div xmlns="http://www.w3.org/1999/xhtml"
+                   class="card-title-box"
+                   style="display:grid; place-items:center; text-align:center; width:100%; height:100%; box-sizing:border-box; min-width:0; min-height:0; margin:0; word-break:break-word; overflow-wrap:anywhere;"
+                   [style.font-family]="c.titleStyle?.fontFamily || 'system-ui, sans-serif'"
+                   [style.font-weight]="c.titleStyle?.fontWeight || 600"
+                   [style.font-style]="c.titleStyle?.fontStyle || 'normal'"
+                   [style.color]="c.titleStyle?.color || '#222'"
+                   [style.line-height]="(c.titleStyle?.lineHeight || 1.2)"
+                   [style.font-size.px]="titleFontLocalPx(s, c)">
+                {{ c.title }}
+              </div>
             </foreignObject>
           </g>
         }
@@ -191,4 +204,6 @@
       </g>
     }
   </svg>
+  <!-- offscreen measurer for auto font sizing -->
+  <div #titleMeasurer class="card-title-box title-measurer" style="position: fixed; left: -99999px; top: -99999px; visibility: hidden; width: 0; height: 0; white-space: normal; display:grid; place-items:center; text-align:center; box-sizing:border-box; min-width:0; min-height:0; margin:0; word-break:break-word; overflow-wrap:anywhere;"></div>
 </div>

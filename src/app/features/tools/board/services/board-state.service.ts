@@ -66,8 +66,18 @@ export class BoardStateService {
     const body = opts?.body ?? '';
     const color = opts?.color ?? '#ffffff';
     const shape = (opts as any)?.shape ?? 'rect';
+    const titleStyle = (opts as any)?.titleStyle ?? {
+      fontFamily: 'system-ui, sans-serif',
+      fontWeight: 600,
+      fontStyle: 'normal',
+      color: '#222',
+      sizeMode: 'auto',
+      lineHeight: 1.2,
+      paddingUnits: 1,
+    };
+    const rectStyle = (opts as any)?.rectStyle ?? { cornerRadiusUnits: 0 };
     this.setState(s => {
-      s.cards.push({id, boardId: s.boardId, x: xUnits, y: yUnits, width, height, title, body, color, shape});
+      s.cards.push({id, boardId: s.boardId, x: xUnits, y: yUnits, width, height, title, body, color, shape, titleStyle, rectStyle});
       s.selectedCardIds = [id];
     });
     return id;

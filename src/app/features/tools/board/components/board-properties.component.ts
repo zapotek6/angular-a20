@@ -76,6 +76,68 @@ import {BoardState, CardModel, LinkModel, LinkStyle} from '../models/board.model
               <label>Color</label>
               <input type="color" [ngModel]="card.color" (ngModelChange)="update(card.id, {color: $event})" />
             </div>
+            @if (card.shape === 'rect') {
+              <div class="section-title">Rectangle Style</div>
+              <div class="field small">
+                <label>Corner radius (units)</label>
+                <input type="number" step="0.2" min="0"
+                       [ngModel]="card.rectStyle?.cornerRadiusUnits || 0"
+                       (ngModelChange)="updateRectStyle(card, {cornerRadiusUnits: toNum($event)})" />
+              </div>
+            }
+            <div class="section-title">Title Style</div>
+            <div class="field">
+              <label>Font family</label>
+              <input type="text" [ngModel]="card.titleStyle?.fontFamily || 'system-ui, sans-serif'"
+                     (ngModelChange)="updateTitleStyle(card, {fontFamily: $event})"/>
+            </div>
+            <div class="field small">
+              <label>Font weight</label>
+              <select [ngModel]="card.titleStyle?.fontWeight || 600" (ngModelChange)="updateTitleStyle(card, {fontWeight: $event})">
+                <option [ngValue]="300">300</option>
+                <option [ngValue]="400">400</option>
+                <option [ngValue]="500">500</option>
+                <option [ngValue]="600">600</option>
+                <option [ngValue]="700">700</option>
+              </select>
+            </div>
+            <div class="field small">
+              <label>Font style</label>
+              <select [ngModel]="card.titleStyle?.fontStyle || 'normal'" (ngModelChange)="updateTitleStyle(card, {fontStyle: $event})">
+                <option value="normal">normal</option>
+                <option value="italic">italic</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Title color</label>
+              <input type="color" [ngModel]="card.titleStyle?.color || '#222'"
+                     (ngModelChange)="updateTitleStyle(card, {color: $event})" />
+            </div>
+            <div class="field small">
+              <label>Size mode</label>
+              <label><input type="radio" name="title-size-mode" [checked]="(card.titleStyle?.sizeMode || 'auto') === 'auto'"
+                            (change)="updateTitleStyle(card, {sizeMode: 'auto'})"/> Auto</label>
+              <label><input type="radio" name="title-size-mode" [checked]="(card.titleStyle?.sizeMode || 'auto') === 'fixed'"
+                            (change)="updateTitleStyle(card, {sizeMode: 'fixed'})"/> Fixed</label>
+            </div>
+            @if ((card.titleStyle?.sizeMode || 'auto') === 'fixed') {
+              <div class="field small">
+                <label>Font size (units)</label>
+                <input type="number" step="0.2" min="0.2"
+                       [ngModel]="card.titleStyle?.fontSizeUnits || 1.2/10"
+                       (ngModelChange)="updateTitleStyle(card, {fontSizeUnits: toNum($event)})"/>
+              </div>
+            }
+            <div class="field small">
+              <label>Line height</label>
+              <input type="number" step="0.1" min="0.8" [ngModel]="card.titleStyle?.lineHeight || 1.2"
+                     (ngModelChange)="updateTitleStyle(card, {lineHeight: toNum($event)})"/>
+            </div>
+            <div class="field small">
+              <label>Title padding (units)</label>
+              <input type="number" step="0.2" min="0" [ngModel]="card.titleStyle?.paddingUnits ?? 1"
+                     (ngModelChange)="updateTitleStyle(card, {paddingUnits: toNum($event)})"/>
+            </div>
             <div class="field small">
               <label>Position (x,y)</label>
               <input type="number" [ngModel]="card.x" (ngModelChange)="update(card.id, {x: toNum($event)})" />
@@ -120,6 +182,16 @@ export class BoardPropertiesComponent {
     return s.links.find(l => l.id === id) ?? null;
   }
   update(id: string, patch: Partial<CardModel>) { this.board.updateCard(id, patch); }
+  updateTitleStyle(card: CardModel, partial: any) {
+    const prev = card.titleStyle || {} as any;
+    const next = { ...prev, ...partial };
+    this.board.updateCard(card.id, { titleStyle: next });
+  }
+  updateRectStyle(card: CardModel, partial: any) {
+    const prev = card.rectStyle || {} as any;
+    const next = { ...prev, ...partial };
+    this.board.updateCard(card.id, { rectStyle: next });
+  }
   updateLinkStyle(ln: LinkModel, partial: Partial<LinkStyle>) {
     const nextStyle: LinkStyle = { ...ln.style, ...partial } as LinkStyle;
     this.board.updateLink(ln.id, { style: nextStyle });

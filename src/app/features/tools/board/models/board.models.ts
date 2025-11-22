@@ -28,6 +28,10 @@ export interface CardModel {
   color: string; // CSS color
   shape: CardShape; // v1 uses only 'rect'
   connectionPoints?: ConnectionPoint[]; // if missing, defaults to 4 mid-side points for 'rect'
+  // Title styling (optional; defaults applied at creation)
+  titleStyle?: CardTitleStyle;
+  // Rectangle visual styling (optional)
+  rectStyle?: CardRectStyle;
 }
 
 export interface ViewportState {
@@ -84,4 +88,21 @@ export interface LinkModel {
   // when 'dynamic', the endpoint may be dynamically chosen at render time.
   sourceAnchor?: LinkAnchor; // default 'dynamic'
   targetAnchor?: LinkAnchor; // default 'dynamic'
+}
+
+// Title style configuration
+export interface CardTitleStyle {
+  fontFamily?: string;             // e.g., 'system-ui, sans-serif'
+  fontWeight?: number | string;    // e.g., 400 | 600 | 'bold'
+  fontStyle?: 'normal' | 'italic';
+  color?: string;                  // CSS color
+  sizeMode?: 'auto' | 'fixed';     // default 'auto'
+  fontSizeUnits?: number;          // used when sizeMode === 'fixed' (board units)
+  lineHeight?: number;             // CSS line-height multiplier (e.g., 1.2)
+  paddingUnits?: number;           // inner padding around title area (board units)
+}
+
+// Rectangle styling for cards rendered as 'rect'
+export interface CardRectStyle {
+  cornerRadiusUnits?: number; // rounded corner radius in board units (default 0)
 }

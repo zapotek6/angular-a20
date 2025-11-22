@@ -41,6 +41,7 @@ export class Board {
 
   @ViewChild('svgRoot', {static: true}) svgRoot?: ElementRef<SVGSVGElement>;
   @ViewChild('root', {static: true}) root?: ElementRef<HTMLDivElement>;
+  @ViewChild('titleMeasurer', {static: true}) titleMeasurer?: ElementRef<HTMLDivElement>;
 
   constructor(public readonly board: BoardStateService) {
     this.state$ = this.board.state$;
@@ -366,6 +367,136 @@ export class Board {
   }
 
   protected readonly Math = Math;
+
+  // Rounded corner helper for rect cards
+  clampCornerRadius(c: CardModel): number {
+    const r = c.rectStyle?.cornerRadiusUnits ?? 0;
+    if (!r || r <= 0) return 0;
+    return Math.max(0, Math.min(r, c.width / 2, c.height / 2));
+  }
+
+  // =========================
+  // Title auto-fit measurement
+  // =========================
+  private titleCache = new Map<string, number>();
+  private ensureFitScheduled = new Set<string>();
+
+  private buildTitleKey(card: CardModel, widthPx: number, heightPx: number, zoom: number): string {
+    const st = card.titleStyle || {} as any;
+    return [card.id, card.title, st.fontFamily || 'system-ui, sans-serif', st.fontWeight || 600, st.fontStyle || 'normal', st.lineHeight || 1.2, widthPx.toFixed(2), heightPx.toFixed(2), zoom.toFixed(3)].join('|');
+  }
+
+  // Compute the font size in CSS px in the pre-zoom (units*10) coordinate system.
+  private computeAutoFontPx(card: CardModel, zoom: number): number {
+    const el = this.titleMeasurer?.nativeElement;
+    if (!el) return 12; // fallback
+    const pad = card.titleStyle?.paddingUnits ?? this.titlePaddingUnits;
+    const widthPx = Math.max(0, (card.width - 2 * pad) * UNIT_TO_PX_AT_100 * Math.max(zoom, 0.001));
+    const heightPx = Math.max(0, (card.height - 2 * pad) * UNIT_TO_PX_AT_100 * Math.max(zoom, 0.001));
+    if (widthPx <= 0 || heightPx <= 0 || !card.title) return 0;
+    const key = this.buildTitleKey(card, widthPx, heightPx, zoom);
+    const cached = this.titleCache.get(key);
+    if (cached != null) return cached;
+
+    // Configure measurer styles
+    const st = card.titleStyle || {} as any;
+    el.style.width = widthPx + 'px';
+    el.style.height = heightPx + 'px';
+    el.style.fontFamily = st.fontFamily || 'system-ui, sans-serif';
+    el.style.fontWeight = String(st.fontWeight || 600);
+    el.style.fontStyle = st.fontStyle || 'normal';
+    el.style.lineHeight = String(st.lineHeight || 1.2);
+    el.style.whiteSpace = 'normal';
+    el.style.wordBreak = 'break-word';
+    el.style.overflowWrap = 'anywhere';
+    el.textContent = card.title || '';
+
+    // Binary search font-size px that fits both width and height
+    let lo = 4; // px
+    let hi = Math.max(6, heightPx); // can't exceed container height
+    const fits = (px: number) => {
+      el.style.fontSize = px + 'px';
+      // Force layout
+      const sw = el.scrollWidth; const sh = el.scrollHeight;
+      return sw <= el.clientWidth + 0.5 && sh <= el.clientHeight + 0.5;
+    };
+    // If even minimal size overflows, return minimal
+    if (!fits(lo)) { this.titleCache.set(key, lo); return lo; }
+    // Exponential increase to find upper bound that overflows
+    while (lo < hi && fits(hi)) {
+      lo = hi;
+      hi = Math.min(heightPx * 2, hi * 1.5);
+      if (hi - lo < 0.5) break;
+    }
+    // Binary search between lo..hi
+    let best = lo;
+    for (let i = 0; i < 10; i++) {
+      const mid = (lo + hi) / 2;
+      if (fits(mid)) { best = mid; lo = mid; } else { hi = mid; }
+      if (hi - lo < 0.5) break;
+    }
+    this.titleCache.set(key, best);
+    return best;
+  }
+
+  // Ensure in fixed size mode that the card is large enough to contain the title at the fixed size.
+  private ensureCardFitsTitleFixed(card: CardModel) {
+    const el = this.titleMeasurer?.nativeElement;
+    if (!el) return;
+    const style = card.titleStyle || {};
+    const fontPxLocal = style.fontSizeUnits ?? 1.2; // CSS px in local space (pre-transform)
+    const pad = style.paddingUnits ?? this.titlePaddingUnits;
+    // Measure container in on-screen px at 100% zoom (units->px)
+    const widthPx = Math.max(0, (card.width - 2 * pad) * UNIT_TO_PX_AT_100);
+    const heightPx = Math.max(0, (card.height - 2 * pad) * UNIT_TO_PX_AT_100);
+    const key = `fixedfit|${card.id}|${widthPx.toFixed(2)}|${heightPx.toFixed(2)}|${card.title}|${style.fontFamily}|${style.fontWeight}|${style.fontStyle}|${style.lineHeight}|${fontPxLocal}`;
+    if (this.ensureFitScheduled.has(key)) return;
+    this.ensureFitScheduled.add(key);
+    // Measure async to avoid change detection loops
+    requestAnimationFrame(() => {
+      this.ensureFitScheduled.delete(key);
+      const px = fontPxLocal; // local CSS px to apply to measurer
+      // Configure measurer
+      el.style.width = widthPx + 'px';
+      el.style.height = heightPx + 'px';
+      el.style.fontFamily = style.fontFamily || 'system-ui, sans-serif';
+      el.style.fontWeight = String(style.fontWeight || 600);
+      el.style.fontStyle = style.fontStyle || 'normal';
+      el.style.lineHeight = String(style.lineHeight || 1.2);
+      el.style.fontSize = px + 'px';
+      el.textContent = card.title || '';
+      const neededWidthPx = Math.max(el.scrollWidth, el.clientWidth);
+      const neededHeightPx = Math.max(el.scrollHeight, el.clientHeight);
+      let newWidthUnits = card.width;
+      let newHeightUnits = card.height;
+      if (neededWidthPx > widthPx + 0.5) {
+        const contentUnits = neededWidthPx / UNIT_TO_PX_AT_100;
+        newWidthUnits = Math.max(card.width, contentUnits + 2 * pad);
+      }
+      if (neededHeightPx > heightPx + 0.5) {
+        const contentUnits = neededHeightPx / UNIT_TO_PX_AT_100;
+        newHeightUnits = Math.max(card.height, contentUnits + 2 * pad);
+      }
+      if (newWidthUnits > card.width + 0.01 || newHeightUnits > card.height + 0.01) {
+        this.board.updateCard(card.id, { width: newWidthUnits, height: newHeightUnits });
+      }
+    });
+  }
+
+  // Exposed to template: returns CSS px before zoom (units*10 space)
+  titleFontLocalPx(s: BoardState, card: CardModel): number {
+    const style = card.titleStyle || {};
+    if ((style.sizeMode || 'auto') === 'fixed') {
+      const px = (style.fontSizeUnits ?? 1.2);
+      // ensure the card fits the fixed text
+      this.ensureCardFitsTitleFixed(card);
+      return px;
+    }
+    // convert measured on-screen px to local CSS px (divide by 10*zoom)
+    const measuredScreenPx = this.computeAutoFontPx(card, s.viewport.zoom);
+    const cssPx = measuredScreenPx / Math.max(0.001, (UNIT_TO_PX_AT_100 * s.viewport.zoom));
+    return cssPx;
+  }
 
   // Hover helpers
   private updateHoverState(s: BoardState, x: number, y: number) {
