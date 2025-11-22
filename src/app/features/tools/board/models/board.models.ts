@@ -105,4 +105,9 @@ export interface CardTitleStyle {
 // Rectangle styling for cards rendered as 'rect'
 export interface CardRectStyle {
   cornerRadiusUnits?: number; // rounded corner radius in board units (default 0)
+  borderColor?: string;               // stroke color (CSS) – default '#888'
+  borderWidthUnits?: number;          // stroke width in board units – default 0.2
+  borderDash?: 'solid' | 'dashed' | 'dotted'; // default 'solid'
+  borderLineJoin?: 'miter' | 'round' | 'bevel'; // default 'round'
+  borderLineCap?: 'butt' | 'round' | 'square';  // default 'round'
 }

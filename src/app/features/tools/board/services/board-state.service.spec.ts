@@ -180,4 +180,26 @@ describe('BoardStateService', () => {
     expect(ln.sourceCardId).toBe(a);
     expect(ln.targetCardId).toBe(b); // unchanged
   });
+
+  it('new cards have default rectStyle border properties', () => {
+    const id = service.addCardAt(5, 5);
+    const c = service.getSnapshot().cards.find(x => x.id === id)!;
+    expect(c.rectStyle).toBeTruthy();
+    expect(c.rectStyle?.cornerRadiusUnits).toBe(0);
+    expect(c.rectStyle?.borderColor).toBe('#888');
+    expect(c.rectStyle?.borderWidthUnits).toBeCloseTo(0.2);
+    expect(c.rectStyle?.borderDash).toBe('solid');
+    expect(c.rectStyle?.borderLineJoin).toBe('round');
+    expect(c.rectStyle?.borderLineCap).toBe('round');
+  });
+
+  it('updateCard persists rectStyle border changes', () => {
+    const id = service.addCardAt(0, 0);
+    const orig = service.getSnapshot().cards.find(c => c.id === id)!;
+    service.updateCard(id, { rectStyle: { ...(orig.rectStyle || {}), borderColor: '#123456', borderDash: 'dashed', borderWidthUnits: 0.7 } });
+    const c2 = service.getSnapshot().cards.find(c => c.id === id)!;
+    expect(c2.rectStyle?.borderColor).toBe('#123456');
+    expect(c2.rectStyle?.borderDash).toBe('dashed');
+    expect(c2.rectStyle?.borderWidthUnits).toBeCloseTo(0.7);
+  });
 });

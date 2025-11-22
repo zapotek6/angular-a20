@@ -92,6 +92,11 @@
             <rect class="card-rect" [class.selected]="s.selectedCardIds.includes(c.id)"
                   [attr.width]="c.width" [attr.height]="c.height" [attr.fill]="c.color"
                   [attr.rx]="clampCornerRadius(c)" [attr.ry]="clampCornerRadius(c)"
+                  [attr.stroke]="c.rectStyle?.borderColor || '#888'"
+                  [attr.stroke-width]="c.rectStyle?.borderWidthUnits ?? 0.2"
+                  [attr.stroke-dasharray]="cardDashArray(c)"
+                  [attr.stroke-linejoin]="c.rectStyle?.borderLineJoin || 'round'"
+                  [attr.stroke-linecap]="c.rectStyle?.borderLineCap || 'round'"
                   (mousedown)="onCardPointerDown($event, c)"></rect>
             <!-- Centered, wrapped title inside card using foreignObject -->
             @let pad = (c.titleStyle?.paddingUnits ?? titlePaddingUnits);

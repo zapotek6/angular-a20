@@ -84,6 +84,44 @@ import {BoardState, CardModel, LinkModel, LinkStyle} from '../models/board.model
                        [ngModel]="card.rectStyle?.cornerRadiusUnits || 0"
                        (ngModelChange)="updateRectStyle(card, {cornerRadiusUnits: toNum($event)})" />
               </div>
+              <div class="field">
+                <label>Border color</label>
+                <input type="color" [ngModel]="card.rectStyle?.borderColor || '#888'"
+                       (ngModelChange)="updateRectStyle(card, {borderColor: $event})" />
+              </div>
+              <div class="field small">
+                <label>Border width (units)</label>
+                <input type="number" step="0.1" min="0"
+                       [ngModel]="card.rectStyle?.borderWidthUnits ?? 0.2"
+                       (ngModelChange)="updateRectStyle(card, {borderWidthUnits: toNum($event)})" />
+              </div>
+              <div class="field small">
+                <label>Border dash</label>
+                <select [ngModel]="card.rectStyle?.borderDash || 'solid'"
+                        (ngModelChange)="updateRectStyle(card, {borderDash: $event})">
+                  <option value="solid">solid</option>
+                  <option value="dashed">dashed</option>
+                  <option value="dotted">dotted</option>
+                </select>
+              </div>
+              <div class="field small">
+                <label>Line join</label>
+                <select [ngModel]="card.rectStyle?.borderLineJoin || 'round'"
+                        (ngModelChange)="updateRectStyle(card, {borderLineJoin: $event})">
+                  <option value="miter">miter</option>
+                  <option value="round">round</option>
+                  <option value="bevel">bevel</option>
+                </select>
+              </div>
+              <div class="field small">
+                <label>Line cap</label>
+                <select [ngModel]="card.rectStyle?.borderLineCap || 'round'"
+                        (ngModelChange)="updateRectStyle(card, {borderLineCap: $event})">
+                  <option value="butt">butt</option>
+                  <option value="round">round</option>
+                  <option value="square">square</option>
+                </select>
+              </div>
             }
             <div class="section-title">Title Style</div>
             <div class="field">

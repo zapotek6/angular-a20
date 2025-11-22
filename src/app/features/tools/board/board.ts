@@ -375,6 +375,16 @@ export class Board {
     return Math.max(0, Math.min(r, c.width / 2, c.height / 2));
   }
 
+  // Compute stroke-dasharray based on card's border dash style and width (in board units)
+  cardDashArray(c: CardModel): string | null {
+    const dash = c.rectStyle?.borderDash || 'solid';
+    if (dash === 'solid') return null;
+    const w = Math.max(0.001, c.rectStyle?.borderWidthUnits ?? 0.2);
+    if (dash === 'dashed') return `${w * 4} ${w * 2}`;
+    if (dash === 'dotted') return `${w} ${w * 1.2}`;
+    return null;
+  }
+
   // =========================
   // Title auto-fit measurement
   // =========================

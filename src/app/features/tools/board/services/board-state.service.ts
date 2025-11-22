@@ -75,7 +75,14 @@ export class BoardStateService {
       lineHeight: 1.2,
       paddingUnits: 1,
     };
-    const rectStyle = (opts as any)?.rectStyle ?? { cornerRadiusUnits: 0 };
+    const rectStyle = (opts as any)?.rectStyle ?? {
+      cornerRadiusUnits: 0,
+      borderColor: '#888',
+      borderWidthUnits: 0.2,
+      borderDash: 'solid',
+      borderLineJoin: 'round',
+      borderLineCap: 'round',
+    };
     this.setState(s => {
       s.cards.push({id, boardId: s.boardId, x: xUnits, y: yUnits, width, height, title, body, color, shape, titleStyle, rectStyle});
       s.selectedCardIds = [id];
